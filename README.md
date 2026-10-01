@@ -163,3 +163,11 @@ This project uses [uv](https://docs.astral.sh/uv/):
     uv run pytest
 
 See [ideas.md](ideas.md) for the roadmap and open decisions.
+
+### Releasing
+
+1. Bump `version` in `pyproject.toml` and merge to `main` (CI runs the tests on Python 3.10–3.13).
+2. Publish a GitHub release tagged `v<version>`, for example `v0.2.0`.
+3. The `Release` workflow builds and tests that tag, publishes to TestPyPI, then waits for approval
+   of the `pypi` environment before publishing to PyPI. It uses trusted publishing; no token is
+   stored.
