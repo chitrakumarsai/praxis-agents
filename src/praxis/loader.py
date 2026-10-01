@@ -1,4 +1,7 @@
-"""Load a praxis source directory (Markdown + YAML frontmatter) into a :class:`Pack`."""
+"""Load a praxis source directory (Markdown + YAML frontmatter) into a :class:`Pack`.
+
+Layout: ``rules/*.md`` and, optionally, ``skills/<name>/SKILL.md`` with ``references/**/*.md``.
+"""
 
 from __future__ import annotations
 
@@ -8,13 +11,19 @@ from typing import Any
 
 import yaml
 
-from praxis.model import BEGIN_MARKER, END_MARKER, SCOPES, Pack, Rule
+from praxis.model import BEGIN_MARKER, END_MARKER, SCOPES, Pack, Reference, Rule, Skill
 
 FENCE = "---"
 RULE_KEYS = frozenset({"id", "scope", "globs"})
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ORDER_PREFIX = re.compile(r"^(\d+)-")
 FORBIDDEN_GLOB_CHARS = frozenset("`\r\n")
+
+SKILL_FILE = "SKILL.md"
+SKILL_KEYS = frozenset({"name", "description"})
+REFERENCES_DIR = "references"
+MAX_SKILL_NAME = 64  # limits from the Agent Skills format
+MAX_DESCRIPTION = 1024
 
 
 class PackError(ValueError):
@@ -24,10 +33,10 @@ class PackError(ValueError):
 def split_frontmatter(text: str, source: Path) -> tuple[dict[str, Any], str]:
     """Return ``(frontmatter, body)``; frontmatter is empty when the file has none."""
     lines = text.splitlines(keepends=True)
-    if not lines or lines[0].strip() != FENCE:
+    if not lines or lines[0].rstrip() != FENCE:
         return {}, text
     for index, line in enumerate(lines[1:], start=1):
-        if line.strip() == FENCE:
+        if line.rstrip() == FENCE:  # column 0 only; indented --- belongs to the YAML
             return _parse_yaml("".join(lines[1:index]), source), "".join(lines[index + 1 :])
     raise PackError(f"{source}: frontmatter is not closed with '{FENCE}'")
 
@@ -48,9 +57,7 @@ def parse_rule(text: str, source: Path) -> Rule:
     """Parse one rule file. The id defaults to the file name minus any ``NNN-`` prefix."""
     meta, body = split_frontmatter(text, source)
 
-    unknown = sorted((str(key) for key in meta if key not in RULE_KEYS))
-    if unknown:
-        raise PackError(f"{source}: unknown frontmatter key(s): {', '.join(unknown)}")
+    _reject_unknown_keys(meta, RULE_KEYS, source)
 
     rule_id = meta.get("id", ORDER_PREFIX.sub("", source.stem))
     if not isinstance(rule_id, str) or not ID_PATTERN.match(rule_id):
@@ -62,13 +69,22 @@ def parse_rule(text: str, source: Path) -> Rule:
 
     globs = _parse_globs(meta.get("globs"), scope, source)
 
+    return Rule(id=rule_id, body=_clean_body(body, "rule", source), scope=scope, globs=globs)
+
+
+def _reject_unknown_keys(meta: dict[str, Any], allowed: frozenset[str], source: Path) -> None:
+    unknown = sorted(str(key) for key in meta if key not in allowed)
+    if unknown:
+        raise PackError(f"{source}: unknown frontmatter key(s): {', '.join(unknown)}")
+
+
+def _clean_body(body: str, kind: str, source: Path) -> str:
     body = body.strip()
     if not body:
-        raise PackError(f"{source}: rule body is empty")
+        raise PackError(f"{source}: {kind} body is empty")
     if BEGIN_MARKER in body or END_MARKER in body:
-        raise PackError(f"{source}: rule body must not contain praxis markers")
-
-    return Rule(id=rule_id, body=body, scope=scope, globs=globs)
+        raise PackError(f"{source}: {kind} body must not contain praxis markers")
+    return body
 
 
 def _parse_globs(raw: Any, scope: str, source: Path) -> tuple[str, ...]:
@@ -95,14 +111,69 @@ def _rule_order(path: Path) -> tuple[float, str]:
     return (int(match.group(1)) if match else float("inf"), path.name)
 
 
+def parse_skill(skill_dir: Path) -> Skill:
+    """Parse ``skill_dir/SKILL.md`` and its ``references/`` files."""
+    source = skill_dir / SKILL_FILE
+    if not source.is_file():
+        raise PackError(f"{source}: {SKILL_FILE} not found")
+    meta, body = split_frontmatter(source.read_text(encoding="utf-8-sig"), source)
+    _reject_unknown_keys(meta, SKILL_KEYS, source)
+
+    name = meta.get("name")
+    if not isinstance(name, str) or len(name) > MAX_SKILL_NAME or not ID_PATTERN.match(name):
+        raise PackError(
+            f"{source}: invalid skill name {name!r}; use up to {MAX_SKILL_NAME} "
+            "lowercase characters joined by hyphens"
+        )
+    if name != skill_dir.name:
+        raise PackError(f"{source}: name {name!r} must match its directory {skill_dir.name!r}")
+
+    description = meta.get("description")
+    if not isinstance(description, str) or not 0 < len(description.strip()) <= MAX_DESCRIPTION:
+        raise PackError(
+            f"{source}: 'description' must be a string of 1-{MAX_DESCRIPTION} characters"
+        )
+
+    return Skill(
+        name=name,
+        description=" ".join(description.split()),
+        body=_clean_body(body, "skill", source),
+        references=_load_references(skill_dir),
+    )
+
+
+def _load_references(skill_dir: Path) -> tuple[Reference, ...]:
+    references = []
+    for path in skill_dir.rglob("*"):
+        relative = path.relative_to(skill_dir)
+        relpath = relative.as_posix()
+        if any(part.startswith(".") for part in relative.parts):
+            continue
+        if path.is_symlink():
+            raise PackError(f"{skill_dir}: {relpath!r}: symlinks are not allowed in skills")
+        if not path.is_file():
+            continue
+        if relpath == SKILL_FILE:
+            continue
+        if relative.parts[0] != REFERENCES_DIR or path.suffix != ".md":
+            raise PackError(
+                f"{skill_dir}: unsupported file {relpath!r}; a skill may contain only "
+                f"{SKILL_FILE} and {REFERENCES_DIR}/**/*.md"
+            )
+        references.append(Reference(relpath, path.read_text(encoding="utf-8-sig").strip()))
+    return tuple(sorted(references, key=lambda reference: reference.path))
+
+
 def load_pack(root: Path) -> Pack:
-    """Load every visible ``rules/*.md`` file under ``root``, in prefix order."""
-    rules_dir = root / "rules"
-    if not rules_dir.is_dir():
-        raise PackError(f"{rules_dir}: rules directory not found")
+    """Load visible rules in prefix order, then skills in name order."""
+    rules_dir, skills_dir = root / "rules", root / "skills"
+    if not rules_dir.is_dir() and not skills_dir.is_dir():
+        raise PackError(f"{root}: no rules/ or skills/ directory found")
 
     paths = [
-        path for path in rules_dir.glob("*.md") if path.is_file() and not path.name.startswith(".")
+        path
+        for path in (rules_dir.glob("*.md") if rules_dir.is_dir() else ())
+        if path.is_file() and not path.name.startswith(".")
     ]
     rules = tuple(
         parse_rule(path.read_text(encoding="utf-8-sig"), path)
@@ -115,4 +186,9 @@ def load_pack(root: Path) -> Pack:
             raise PackError(f"{rules_dir}: duplicate rule id {rule.id!r}")
         seen.add(rule.id)
 
-    return Pack(rules=rules)
+    skill_dirs = (
+        sorted(path for path in skills_dir.iterdir() if path.is_dir() and not path.name.startswith("."))
+        if skills_dir.is_dir()
+        else []
+    )
+    return Pack(rules=rules, skills=tuple(parse_skill(path) for path in skill_dirs))

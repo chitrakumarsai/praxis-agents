@@ -75,3 +75,47 @@ def test_empty_target_list_exits_2(project, capsys):
     assert run(project, "sync", "--target", " , ") == 2
 
     assert "no targets selected" in capsys.readouterr().err
+
+
+def test_packs_lists_bundled_packs(capsys):
+    assert main(["packs"]) == 0
+
+    assert "agent-engineering" in capsys.readouterr().out.split()
+
+
+def test_init_copies_pack_then_sync_writes_rules_and_skills(tmp_path, capsys):
+    assert main(["init", "agent-engineering", "--root", str(tmp_path)]) == 0
+    assert (tmp_path / ".praxis" / "rules").is_dir()
+
+    assert run(tmp_path, "sync") == 0
+
+    assert "Bound every loop" in (tmp_path / "AGENTS.md").read_text(encoding="utf-8")
+    for base in (".agents/skills", ".claude/skills"):
+        assert (tmp_path / base / "eval-design" / "SKILL.md").is_file()
+        assert (tmp_path / base / "harness-design" / "references" / "tool-contract.md").is_file()
+    assert run(tmp_path, "check") == 0
+
+
+def test_init_refuses_existing_source(project, capsys):
+    assert main(["init", "agent-engineering", "--root", str(project)]) == 2
+
+    assert "already exists" in capsys.readouterr().err
+
+
+def test_init_unknown_pack_exits_2(tmp_path, capsys):
+    assert main(["init", "nope", "--root", str(tmp_path)]) == 2
+
+    assert "unknown pack 'nope'" in capsys.readouterr().err
+
+
+def test_init_failure_leaves_no_partial_source(tmp_path, monkeypatch, capsys):
+    import praxis.bundled
+
+    def fail(*args):
+        raise OSError("disk full")
+
+    monkeypatch.setattr(praxis.bundled.Path, "write_bytes", fail)
+
+    assert main(["init", "agent-engineering", "--root", str(tmp_path)]) == 2
+    assert not (tmp_path / ".praxis").exists()
+    assert list(tmp_path.iterdir()) == []

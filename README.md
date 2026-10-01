@@ -23,7 +23,15 @@ Engineering guidance usually sits in docs that agents never read, or in tool-spe
 
 ## Quick start
 
-Write rules as Markdown files in `.praxis/rules/` (rendered in file-name order):
+Start from a bundled pack, or write your own source in `.praxis/`:
+
+    praxis packs                        # list bundled packs
+    praxis init agent-engineering       # copy a pack into .praxis/
+    praxis sync                         # write AGENTS.md, CLAUDE.md, and skills
+
+### Rules
+
+Always-on rules live in `.praxis/rules/*.md`, ordered by their numeric file-name prefix:
 
 ```markdown
 ---
@@ -33,14 +41,26 @@ globs: ["**/agents/**"]    # required when scope is glob
 Every agent loop has a max-iteration cap and a deterministic stop condition.
 ```
 
-Then generate the instruction files:
+### Skills
 
-    praxis sync                     # writes AGENTS.md and CLAUDE.md
+On-demand skills use the [Agent Skills](https://agentskills.io) format:
+`.praxis/skills/<name>/SKILL.md` (frontmatter `name` and `description`) plus optional
+`references/**/*.md`.
+
+### Targets
+
+| Target | Writes | Read by |
+|---|---|---|
+| `agents` | `AGENTS.md`, `.agents/skills/` | Codex, Cursor, GitHub Copilot, and others |
+| `claude` | `CLAUDE.md` (imports `AGENTS.md`), `.claude/skills/` | Claude Code |
+
+    praxis sync                     # all targets
     praxis sync --target agents     # only AGENTS.md
     praxis check                    # exit 1 if generated files are stale (for CI)
 
-praxis only edits the section between `<!-- praxis:begin -->` and `<!-- praxis:end -->`;
-anything you write outside it is kept.
+In `AGENTS.md` and `CLAUDE.md`, praxis only edits the section between `<!-- praxis:begin -->` and
+`<!-- praxis:end -->`; anything you write outside it is kept. Skill files are owned by praxis and
+marked with a generated-file comment; praxis refuses to overwrite a skill file it didn't write.
 
 ## Development
 

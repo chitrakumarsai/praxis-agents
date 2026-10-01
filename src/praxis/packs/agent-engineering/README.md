@@ -11,12 +11,10 @@ evaluation, RAG, and structured extraction.
 
 ## Use
 
-Until `praxis init --pack` exists (phase 2), compile the rules directly:
+    praxis init agent-engineering   # copies this pack into .praxis/
+    praxis sync                     # AGENTS.md, CLAUDE.md, .agents/skills/, .claude/skills/
 
-    praxis sync --source path/to/packs/agent-engineering
-
-Skills aren't emitted by praxis yet; they're in the Agent Skills format (`SKILL.md` with `name` and
-`description` frontmatter), so they can be copied into a tool's skills directory by hand.
+Edit the copy in `.praxis/` to fit your project; it's yours from then on.
 
 ## Sources
 

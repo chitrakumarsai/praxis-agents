@@ -1,7 +1,8 @@
-"""``AGENTS.md``: the shared instruction file read by Codex, Cursor, Copilot, and others."""
+"""``AGENTS.md`` and ``.agents/skills/``: read by Codex, Cursor, GitHub Copilot, and others."""
 
 from __future__ import annotations
 
+from praxis.adapters.skills import SHARED_SKILLS_DIR, render_skills
 from praxis.model import OutputFile, Pack
 
 PATH = "AGENTS.md"
@@ -20,4 +21,4 @@ def render(pack: Pack) -> tuple[OutputFile, ...]:
         sections.append("## Engineering standards\n\n" + "\n\n".join(always))
     if scoped:
         sections.append("## File-scoped standards\n\n" + "\n\n".join(scoped))
-    return (OutputFile(PATH, "\n\n".join(sections)),)
+    return (OutputFile(PATH, "\n\n".join(sections)), *render_skills(pack, SHARED_SKILLS_DIR))

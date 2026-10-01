@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 
 from praxis.loader import PackError, load_pack, parse_rule
-from praxis.model import Rule
+from praxis.model import Reference, Rule, Skill
 
 SOURCE = Path("rules/020-bounded-loops.md")
 
@@ -75,8 +75,8 @@ def test_load_pack_rejects_duplicate_ids(tmp_path):
         load_pack(tmp_path)
 
 
-def test_load_pack_requires_rules_directory(tmp_path):
-    with pytest.raises(PackError, match="rules directory not found"):
+def test_load_pack_requires_rules_or_skills(tmp_path):
+    with pytest.raises(PackError, match="no rules/ or skills/ directory"):
         load_pack(tmp_path)
 
 
@@ -117,3 +117,132 @@ def test_load_pack_skips_hidden_files_and_directories(tmp_path):
     (tmp_path / "rules" / "folder.md").mkdir()
 
     assert [rule.id for rule in load_pack(tmp_path).rules] == ["real"]
+
+
+def write_skill(root: Path, name: str, skill_md: str, files: dict[str, str] | None = None) -> Path:
+    skill_dir = root / "skills" / name
+    skill_dir.mkdir(parents=True, exist_ok=True)
+    (skill_dir / "SKILL.md").write_text(skill_md, encoding="utf-8")
+    for relpath, text in (files or {}).items():
+        (skill_dir / relpath).parent.mkdir(parents=True, exist_ok=True)
+        (skill_dir / relpath).write_text(text, encoding="utf-8")
+    return skill_dir
+
+
+SKILL_MD = "---\nname: eval-design\ndescription: Design evals. Use when writing evals.\n---\n\n# Evals\n"
+
+
+def test_load_pack_without_skills_directory_has_no_skills(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+
+    assert load_pack(tmp_path).skills == ()
+
+
+def test_load_pack_reads_skills_and_nested_references(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+    write_skill(
+        tmp_path,
+        "eval-design",
+        SKILL_MD,
+        {"references/metrics.md": "# Metrics\n", "references/deep/pass-at-k.md": "# pass@k\n"},
+    )
+
+    (skill,) = load_pack(tmp_path).skills
+
+    assert skill == Skill(
+        name="eval-design",
+        description="Design evals. Use when writing evals.",
+        body="# Evals",
+        references=(
+            Reference("references/deep/pass-at-k.md", "# pass@k"),
+            Reference("references/metrics.md", "# Metrics"),
+        ),
+    )
+
+
+def test_load_pack_orders_skills_by_name(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+    for name in ("zeta", "alpha"):
+        write_skill(tmp_path, name, f"---\nname: {name}\ndescription: Does {name}.\n---\nBody.")
+
+    assert [skill.name for skill in load_pack(tmp_path).skills] == ["alpha", "zeta"]
+
+
+@pytest.mark.parametrize(
+    ("dir_name", "skill_md", "message"),
+    [
+        ("evals", SKILL_MD, "name 'eval-design' must match its directory 'evals'"),
+        ("Bad_Name", "---\nname: Bad_Name\ndescription: x\n---\nBody", "invalid skill name"),
+        ("x" * 65, f"---\nname: {'x' * 65}\ndescription: x\n---\nBody", "invalid skill name"),
+        ("s", "---\nname: s\n---\nBody", "'description' must be a string of 1-1024 characters"),
+        ("s", f"---\nname: s\ndescription: {'d' * 1025}\n---\nBody", "1-1024 characters"),
+        ("s", "---\nname: s\ndescription: x\nlicense: MIT\n---\nBody", "unknown frontmatter key(s): license"),
+        ("s", "---\nname: s\ndescription: x\n---\n  \n", "skill body is empty"),
+        ("s", "---\nname: s\ndescription: x\n---\n<!-- praxis:end -->", "must not contain praxis markers"),
+    ],
+)
+def test_invalid_skills_raise(tmp_path, dir_name, skill_md, message):
+    write_rule(tmp_path, "rule.md", "Body.")
+    write_skill(tmp_path, dir_name, skill_md)
+
+    with pytest.raises(PackError) as exc:
+        load_pack(tmp_path)
+
+    assert message in str(exc.value)
+    assert "SKILL.md" in str(exc.value)
+
+
+def test_skill_directory_requires_skill_md(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+    (tmp_path / "skills" / "empty").mkdir(parents=True)
+
+    with pytest.raises(PackError, match="SKILL.md not found"):
+        load_pack(tmp_path)
+
+
+def test_skill_rejects_unsupported_files(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+    write_skill(tmp_path, "eval-design", SKILL_MD, {"scripts/run.sh": "echo hi"})
+
+    with pytest.raises(PackError, match="unsupported file 'scripts/run.sh'"):
+        load_pack(tmp_path)
+
+
+def test_skill_ignores_hidden_files(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+    write_skill(tmp_path, "eval-design", SKILL_MD, {".DS_Store": "", "references/.#lock.md": ""})
+
+    assert load_pack(tmp_path).skills[0].references == ()
+
+
+def test_indented_fence_inside_frontmatter_does_not_close_it():
+    text = "---\nid: fenced\nscope: glob\nglobs:\n  - '*.py'\n  ---\n---\nBody"
+
+    with pytest.raises(PackError, match="invalid YAML frontmatter"):
+        parse_rule(text, SOURCE)
+
+
+def test_skill_description_whitespace_is_normalized(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+    write_skill(tmp_path, "s", "---\nname: s\ndescription: |\n  Line one.\n  Line two.\n---\nBody")
+
+    assert load_pack(tmp_path).skills[0].description == "Line one. Line two."
+
+
+def test_skill_rejects_symlinked_references(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+    skill_dir = write_skill(tmp_path, "eval-design", SKILL_MD, {"references/real.md": "x"})
+    secret = tmp_path / "secret.md"
+    secret.write_text("secret", encoding="utf-8")
+    (skill_dir / "references" / "link.md").symlink_to(secret)
+
+    with pytest.raises(PackError, match="symlinks are not allowed"):
+        load_pack(tmp_path)
+
+
+def test_load_pack_allows_skills_without_rules(tmp_path):
+    write_skill(tmp_path, "eval-design", SKILL_MD)
+
+    pack = load_pack(tmp_path)
+
+    assert pack.rules == () and [skill.name for skill in pack.skills] == ["eval-design"]

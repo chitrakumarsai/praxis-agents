@@ -101,11 +101,13 @@ Rules render in file-name order, so numeric prefixes control ordering.
 - Known gaps (deferred): a marker quoted inside a code fence in a user's file still counts as a
   real marker; multi-file sync isn't transactional (each file is atomic on its own)
 
-### Phase 2 — Skills and first pack
-- [ ] Model + loader for skills (`SKILL.md` + `references/`), validated against the Agent Skills spec
-- [ ] Skills output for each target that supports them
-- [x] Draft `packs/agent-engineering/`: 14 rules (~130 lines in AGENTS.md) + 5 skills with references — **awaiting review**
-- [ ] `praxis init --pack agent-engineering`: bundled starter pack distilled from the source material
+### Phase 2 — Skills and first pack (done)
+- [x] Model + loader for skills (`SKILL.md` + `references/`), validated against the Agent Skills spec
+- [x] Skills output: `agents` → `.agents/skills/` (Codex, Cursor, Copilot), `claude` → `.claude/skills/`
+- [x] `agent-engineering` pack: 14 rules (~130 lines in AGENTS.md) + 5 skills with references
+- [x] Packs bundled in the wheel (`src/praxis/packs/`); `praxis packs` and `praxis init <pack>`
+- Known gaps (deferred): skill files aren't deleted when a skill is removed from the source;
+  skills support only `references/**/*.md` (no `scripts/` or `assets/` yet)
 
 ### Phase 3 — Scoped adapters
 - [ ] Cursor `.mdc` adapter (globs → `globs`, always → `alwaysApply`)
@@ -118,8 +120,8 @@ Rules render in file-name order, so numeric prefixes control ordering.
 ## Open decisions
 
 1. **Config file.** Keep CLI flags only, or add `praxis.toml` (source dir, default targets)?
-2. **Pack distribution.** Bundle packs in the wheel, or install them from git / separate packages?
+2. ~~**Pack distribution.**~~ Decided: bundled in the wheel.
 3. **Distillation workflow.** Hand-written, or a `praxis distill` helper that drafts rules for review?
-4. **Skill output paths.** Which skills directory per tool (verify current docs for Codex, Cursor, Copilot).
+4. ~~**Skill output paths.**~~ Decided: `.agents/skills/` (Codex, Cursor, Copilot) and `.claude/skills/` (Claude Code).
 5. **Licensing.** Confirm shipped packs contain only original distilled text with links to sources.
 6. **Generated-file policy.** Commit generated `AGENTS.md`/`CLAUDE.md`, or generate in CI only?

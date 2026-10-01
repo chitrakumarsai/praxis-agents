@@ -1,50 +1,39 @@
-"""Content checks for the packs in ``packs/``, until the skills loader exists (phase 2)."""
+"""Content checks for the packs bundled in ``praxis/packs``."""
 
 import re
-from pathlib import Path
 
 import pytest
 
 from praxis.adapters import agents_md
-from praxis.loader import load_pack, split_frontmatter
+from praxis.bundled import available_packs, pack_source
+from praxis.loader import load_pack
 from praxis.sync import managed_block
 
-PACKS_DIR = Path(__file__).resolve().parent.parent / "packs"
-PACKS = sorted(path for path in PACKS_DIR.iterdir() if path.is_dir())
-SKILLS = sorted(skill for pack in PACKS for skill in (pack / "skills").glob("*/SKILL.md"))
+PACK_NAMES = available_packs()
 
 # Always-on rules are loaded on every request; keep them short enough to be followed.
 MAX_RULE_LINES = 160
-SKILL_NAME = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
-MAX_SKILL_NAME = 64
-MAX_DESCRIPTION = 1024
 REFERENCE_LINK = re.compile(r"`(references/[^`]+)`")
 
 
-def test_packs_exist():
-    assert PACKS
+def test_agent_engineering_pack_is_bundled():
+    assert "agent-engineering" in PACK_NAMES
 
 
-@pytest.mark.parametrize("pack", PACKS, ids=lambda path: path.name)
-def test_pack_rules_load_and_fit_budget(pack):
-    (output,) = agents_md.render(load_pack(pack))
+@pytest.mark.parametrize("name", PACK_NAMES)
+def test_pack_rules_fit_budget(name):
+    with pack_source(name) as source:
+        rendered = agents_md.render(load_pack(source))
 
-    assert len(managed_block(output.content).splitlines()) <= MAX_RULE_LINES
-
-
-@pytest.mark.parametrize("skill_md", SKILLS, ids=lambda path: path.parent.name)
-def test_skill_frontmatter_follows_agent_skills_format(skill_md):
-    meta, body = split_frontmatter(skill_md.read_text(encoding="utf-8"), skill_md)
-
-    assert set(meta) == {"name", "description"}
-    assert meta["name"] == skill_md.parent.name
-    assert SKILL_NAME.match(meta["name"]) and len(meta["name"]) <= MAX_SKILL_NAME
-    assert 0 < len(meta["description"]) <= MAX_DESCRIPTION
-    assert body.strip()
+    (agents,) = [output for output in rendered if output.path == agents_md.PATH]
+    assert len(managed_block(agents.content).splitlines()) <= MAX_RULE_LINES
 
 
-@pytest.mark.parametrize("skill_md", SKILLS, ids=lambda path: path.parent.name)
-def test_skill_reference_links_resolve(skill_md):
-    links = REFERENCE_LINK.findall(skill_md.read_text(encoding="utf-8"))
+@pytest.mark.parametrize("name", PACK_NAMES)
+def test_skill_reference_links_resolve(name):
+    with pack_source(name) as source:
+        pack = load_pack(source)
 
-    assert [link for link in links if not (skill_md.parent / link).is_file()] == []
+    for skill in pack.skills:
+        shipped = {reference.path for reference in skill.references}
+        assert set(REFERENCE_LINK.findall(skill.body)) <= shipped, skill.name
