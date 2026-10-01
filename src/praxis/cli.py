@@ -160,7 +160,7 @@ def run_verify(
     if judge:
         provider, model = judge
         backend = make_backend(provider, model)
-        rules = [rule for rule in pack.rules if not rule.checks]
+        rules = [rule for rule in pack.rules if rule.judge and not rule.checks]
         scope = {rule.id: paths_in_scope(rule, changes) for rule in rules}
         verdicts = Judge(backend).grade(rules, unified_diff(root, base, excluded), scope)
         report_judge(verdicts, len(rules), f"{backend.provider} {backend.model}")

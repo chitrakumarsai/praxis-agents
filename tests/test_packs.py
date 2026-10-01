@@ -118,3 +118,17 @@ def test_bundled_checks_flag_bad_and_pass_good_lines(rule_id):
 
     assert [line for line in bad if not _flagged(rule, line)] == []
     assert [line for line in good if _flagged(rule, line)] == []
+
+
+def test_process_rules_are_not_sent_to_the_judge():
+    # A diff can't show whether success was defined first or cost is measured; grading these
+    # wastes requests and produced false failures in the live smoke test.
+    with pack_source("agent-engineering") as source:
+        skipped = {rule.id for rule in load_pack(source).rules if not rule.judge}
+
+    assert skipped == {
+        "define-success-first",
+        "evaluate-continuously",
+        "cost-per-verified-success",
+        "fix-the-right-layer",
+    }

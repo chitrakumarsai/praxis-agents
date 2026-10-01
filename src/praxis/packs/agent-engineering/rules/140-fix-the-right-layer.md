@@ -1,3 +1,7 @@
+---
+# A process rule: a diff can't show it, so the LLM judge skips it.
+judge: false
+---
 ### Diagnose before changing prompts
 
 - Find the earliest divergence in the trace, then check its inputs. Classify the cause: specification,

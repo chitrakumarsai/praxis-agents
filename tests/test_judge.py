@@ -212,3 +212,13 @@ def test_missing_sdk_explains_how_to_install(monkeypatch):
 
     with pytest.raises(JudgeError, match=r"praxis-agents\[judge\]"):
         AnthropicBackend()
+
+
+def test_rubric_limits_failures_to_what_the_change_introduces():
+    client = FakeClient({"state": reply(PASS)})
+
+    Judge(AnthropicBackend(client=client)).grade((STATE,), DIFF, SCOPE)
+
+    system = client.calls[0]["system"]
+    assert "lines this change adds or modifies" in system
+    assert "practices outside the changed code" in system

@@ -291,3 +291,18 @@ def test_judge_provider_requires_judge(verify_repo):
         run(verify_repo, "verify", "--judge-provider", "openai")
 
     assert exc.value.code == 2
+
+
+def test_verify_judge_skips_rules_marked_judge_false(verify_repo, monkeypatch, capsys):
+    from test_judge import FakeClient
+
+    client = FakeClient()
+    monkeypatch.setattr("praxis.judge.anthropic_backend._default_client", lambda: client)
+    prose = verify_repo / ".praxis" / "rules" / "020-prose.md"
+    prose.write_text("---\njudge: false\n---\nBe kind.\n", encoding="utf-8")
+    (verify_repo / "notes.md").write_text("you are wrong\n", encoding="utf-8")
+
+    assert run(verify_repo, "verify", "--judge") == 0
+
+    assert client.calls == []
+    assert "0 failed, 0 passed, 0 unknown, 0 not applicable" in capsys.readouterr().out

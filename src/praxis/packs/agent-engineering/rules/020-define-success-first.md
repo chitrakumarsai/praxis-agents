@@ -1,3 +1,7 @@
+---
+# A process rule: a diff can't show it, so the LLM judge skips it.
+judge: false
+---
 ### Define success before building
 
 - Write acceptance criteria before choosing models or prompts: required outcomes, evidence,

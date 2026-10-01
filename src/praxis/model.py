@@ -41,6 +41,7 @@ class Rule:
     scope: Scope = "always"
     globs: tuple[str, ...] = ()
     checks: tuple[Check, ...] = ()
+    judge: bool = True  # False for rules a diff can't show, such as process or planning rules
 
 
 @dataclass(frozen=True)

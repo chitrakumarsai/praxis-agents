@@ -131,6 +131,9 @@ Rules render in file-name order, so numeric prefixes control ordering.
       refusal and malformed output -> unknown, token limit refuses instead of truncating; advisory
 - [x] OpenAI provider (`--judge-provider openai`, `judge-openai` extra): Responses API with a strict
       JSON schema; same nonce tags, grounding, and size limit as the Anthropic backend
+- [x] Judge precision: `judge: false` frontmatter skips process rules (4 in the bundled pack); the
+      rubric fails only what a change introduces. Live check: a harmless change got 0 failures from
+      both providers; the flawed demo kept its real violations (6 failures with OpenAI, 7 with Claude)
 - [ ] Calibrate the judge: reviewed pass/fail cases per rule, measure false accepts and rejects,
       then decide whether judge failures may gate the exit code
 - Known limits: project root must be the git top level; `run` checks trust the rule files

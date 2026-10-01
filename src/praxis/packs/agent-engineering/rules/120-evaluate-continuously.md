@@ -1,3 +1,7 @@
+---
+# A process rule: a diff can't show it, so the LLM judge skips it.
+judge: false
+---
 ### Evaluate the model and harness together
 
 - Grade outcomes, not one exact call sequence, unless the sequence is a real requirement.

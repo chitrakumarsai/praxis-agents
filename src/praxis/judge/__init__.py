@@ -46,10 +46,17 @@ You review a code change against one engineering rule and return a verdict.
 The change is the unified diff between <{diff_tag}> and </{diff_tag}>. The rule is between \
 <{rule_tag}> and </{rule_tag}>.
 
+Grade only what this change introduces. Rules often describe a whole system; a single change \
+isn't expected to show every practice they mention.
+
 Verdicts:
-- fail: the diff shows that the change violates the rule.
-- pass: the change does something the rule governs, and the diff shows it complies.
-- not_applicable: nothing in the change is governed by the rule.
+- fail: lines this change adds or modifies break the rule, or code the change adds lacks \
+something the rule requires of that specific code (for example, a loop it adds has no stop \
+condition). Reserve fail for problems a reviewer would block this change for.
+- pass: the change adds or modifies code the rule governs, and the diff shows it complies.
+- not_applicable: nothing the change adds is governed by the rule, or the rule concerns \
+practices outside the changed code (tracing, metrics, evaluation, planning, or infrastructure \
+elsewhere in the system). Missing practices of that kind are not a failure of this change.
 - unknown: the diff alone isn't enough to decide; say what is missing.
 
 For pass and fail, list evidence as `path:line: quote`, where quote is copied exactly from one \

@@ -27,7 +27,7 @@ from praxis.model import (
 )
 
 FENCE = "---"
-RULE_KEYS = frozenset({"id", "scope", "globs", "checks"})
+RULE_KEYS = frozenset({"id", "scope", "globs", "checks", "judge"})
 CHECK_KINDS = ("forbid", "run")
 CHECK_KEYS = frozenset({*CHECK_KINDS, "message"})
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
@@ -88,12 +88,17 @@ def parse_rule(text: str, source: Path) -> Rule:
 
     globs = _parse_globs(meta.get("globs"), scope, source)
 
+    judge = meta.get("judge", True)
+    if not isinstance(judge, bool):
+        raise PackError(f"{source}: 'judge' must be true or false")
+
     return Rule(
         id=rule_id,
         body=_clean_body(body, "rule", source),
         scope=scope,
         globs=globs,
         checks=_parse_checks(meta.get("checks"), source),
+        judge=judge,
     )
 
 

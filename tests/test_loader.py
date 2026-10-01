@@ -307,3 +307,13 @@ def test_invalid_checks_raise(checks, message):
 def test_globs_must_compile():
     with pytest.raises(PackError, match="invalid glob"):
         parse_rule("---\nscope: glob\nglobs: ['src/[z-a].py']\n---\nBody", SOURCE)
+
+
+def test_rule_judge_flag_defaults_to_true_and_can_be_disabled():
+    assert parse_rule("Body", SOURCE).judge is True
+    assert parse_rule("---\njudge: false\n---\nBody", SOURCE).judge is False
+
+
+def test_rule_judge_flag_must_be_boolean():
+    with pytest.raises(PackError, match="'judge' must be true or false"):
+        parse_rule("---\njudge: 'no'\n---\nBody", SOURCE)

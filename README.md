@@ -131,6 +131,10 @@ in, and export it into the shell first: `set -a; . ./.env; set +a`.
     judge (claude-opus-5-5, advisory): 1 failed, 2 passed, 0 unknown, 8 not applicable
 
 - Costs one request per graded rule; the diff is a shared prefix that both providers cache.
+- Add `judge: false` to a rule's frontmatter to skip it: process rules (planning, measurement,
+  evaluation practice) can't be seen in a diff. The bundled pack marks four rules this way.
+- The judge fails only what the change itself introduces; practices that belong to the wider system
+  (tracing, metrics, planning) count as not applicable rather than failures of a small change.
 - Verdicts are `pass`, `fail` (with `path:line` evidence), `not_applicable`, or `unknown`.
   Refusals, cut-off answers, and malformed output count as `unknown`, never `pass`.
 - Judge results are advisory and don't change the exit code: the judge hasn't been calibrated

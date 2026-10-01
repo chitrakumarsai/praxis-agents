@@ -1,3 +1,7 @@
+---
+# A process rule: a diff can't show it, so the LLM judge skips it.
+judge: false
+---
 ### Optimize cost per verified success
 
 - Measure cost per verified successful task, including failures, retries, tools, and human review,
