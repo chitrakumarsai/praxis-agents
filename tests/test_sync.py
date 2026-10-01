@@ -1,7 +1,20 @@
+import os
+
 import pytest
 
 from praxis.model import OutputFile
-from praxis.sync import BEGIN, END, NOTICE, SyncError, apply, managed_block, merge, plan
+from praxis.sync import (
+    BEGIN,
+    END,
+    NOTICE,
+    SyncError,
+    apply,
+    managed_block,
+    merge,
+    plan,
+    plan_stale,
+    unmerge,
+)
 
 
 def test_merge_into_missing_file_creates_block():
@@ -132,3 +145,128 @@ def test_owned_file_refuses_dangling_symlink(tmp_path):
 
     with pytest.raises(SyncError, match="dangling symlink"):
         plan(tmp_path, (OutputFile("SKILL.md", f"{NOTICE}\nnew\n", managed=False),))
+
+
+def test_unmerge_removes_block_and_keeps_user_content():
+    existing = merge("# Notes\n\nMine.\n", "Rules.")
+
+    assert unmerge(existing) == "# Notes\n\nMine.\n"
+
+
+def test_unmerge_returns_none_when_only_the_block_remains():
+    assert unmerge(merge(None, "Rules.")) is None
+
+
+def test_unmerge_leaves_files_without_markers_alone():
+    assert unmerge("# Notes\n") == "# Notes\n"
+
+
+def write(path, text):
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(text, encoding="utf-8")
+    return path
+
+
+def test_plan_stale_deletes_owned_files_no_longer_generated(tmp_path):
+    kept = write(tmp_path / ".agents/skills/keep/SKILL.md", f"{NOTICE}\nkeep\n")
+    stale = write(tmp_path / ".agents/skills/gone/references/a.md", f"{NOTICE}\nold\n")
+    users = write(tmp_path / ".agents/skills/mine/SKILL.md", "My own skill.\n")
+
+    changes = plan_stale(
+        tmp_path,
+        outputs=(OutputFile(".agents/skills/keep/SKILL.md", "x", managed=False),),
+        owned_dirs=(".agents/skills", ".cursor/rules"),
+        managed_paths=(),
+    )
+
+    assert [(change.relpath, change.deleted) for change in changes] == [
+        (".agents/skills/gone/references/a.md", True)
+    ]
+    apply(changes)
+    assert not stale.exists() and not (tmp_path / ".agents/skills/gone").exists()
+    assert kept.exists() and users.exists()
+    assert (tmp_path / ".agents/skills").is_dir()
+
+
+def test_plan_stale_skips_symlinks(tmp_path):
+    target = write(tmp_path / "elsewhere.md", f"{NOTICE}\n")
+    link = tmp_path / ".cursor/rules/link.mdc"
+    link.parent.mkdir(parents=True)
+    link.symlink_to(target)
+
+    assert plan_stale(tmp_path, (), (".cursor/rules",), ()) == ()
+
+
+def test_plan_stale_removes_block_from_managed_file_no_longer_generated(tmp_path):
+    only_block = write(tmp_path / ".github/copilot-instructions.md", merge(None, "Rules."))
+    with_notes = write(tmp_path / "NOTES.md", merge("Mine.\n", "Rules."))
+    untouched = write(tmp_path / "PLAIN.md", "No markers.\n")
+
+    changes = plan_stale(
+        tmp_path, (), (), (".github/copilot-instructions.md", "NOTES.md", "PLAIN.md", "MISSING.md")
+    )
+    apply(changes)
+
+    assert not only_block.exists()
+    assert with_notes.read_text(encoding="utf-8") == "Mine.\n"
+    assert untouched.read_text(encoding="utf-8") == "No markers.\n"
+
+
+def test_plan_stale_ignores_managed_paths_that_are_still_generated(tmp_path):
+    write(tmp_path / "AGENTS.md", merge(None, "Rules."))
+
+    assert plan_stale(tmp_path, (OutputFile("AGENTS.md", "Rules."),), (), ("AGENTS.md",)) == ()
+
+
+def test_plan_stale_ignores_owned_dir_symlinked_outside_root(tmp_path):
+    outside = write(tmp_path / "outside" / "skills" / "x" / "SKILL.md", f"{NOTICE}\n")
+    project = tmp_path / "project"
+    (project / ".claude").mkdir(parents=True)
+    (project / ".claude" / "skills").symlink_to(tmp_path / "outside" / "skills")
+
+    assert plan_stale(project, (), (".claude/skills",), ()) == ()
+    assert outside.exists()
+
+
+def test_plan_stale_requires_notice_as_its_own_line_near_the_top(tmp_path):
+    write(tmp_path / ".cursor/rules/quoted.mdc", f"Our docs quote it: {NOTICE}\n")
+    write(tmp_path / ".cursor/rules/late.mdc", "line\n" * 50 + f"{NOTICE}\n")
+
+    assert plan_stale(tmp_path, (), (".cursor/rules",), ()) == ()
+
+
+def test_plan_stale_keeps_a_file_that_is_also_a_produced_path(tmp_path):
+    produced = write(tmp_path / ".agents/skills/Foo/SKILL.md", f"{NOTICE}\n")
+    alias = tmp_path / ".agents/skills/alias/SKILL.md"
+    alias.parent.mkdir()
+    # A hard link is the same file under another spelling, as with case-insensitive filesystems.
+    os.link(produced, alias)
+
+    outputs = (OutputFile(".agents/skills/Foo/SKILL.md", NOTICE, managed=False),)
+
+    assert plan_stale(tmp_path, outputs, (".agents/skills",), ()) == ()
+
+
+def test_apply_refuses_to_delete_a_file_changed_since_planning(tmp_path):
+    path = write(tmp_path / ".cursor/rules/old.mdc", f"{NOTICE}\nold\n")
+    changes = plan_stale(tmp_path, (), (".cursor/rules",), ())
+    path.write_text(f"{NOTICE}\nedited by hand\n", encoding="utf-8")
+
+    with pytest.raises(SyncError, match="changed since"):
+        apply(changes)
+    assert path.exists()
+
+
+def test_apply_tolerates_a_stale_file_already_deleted(tmp_path):
+    path = write(tmp_path / ".cursor/rules/old.mdc", f"{NOTICE}\n")
+    changes = plan_stale(tmp_path, (), (".cursor/rules",), ())
+    path.unlink()
+
+    assert apply(changes) == ()
+
+
+def test_plan_stale_leaves_symlinked_managed_files_alone(tmp_path):
+    agents = write(tmp_path / "AGENTS.md", merge(None, "Rules."))
+    (tmp_path / "CLAUDE.md").symlink_to(agents)
+
+    assert plan_stale(tmp_path, (), (), ("CLAUDE.md",)) == ()

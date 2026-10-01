@@ -106,8 +106,7 @@ Rules render in file-name order, so numeric prefixes control ordering.
 - [x] Skills output: `agents` → `.agents/skills/` (Codex, Cursor, Copilot), `claude` → `.claude/skills/`
 - [x] `agent-engineering` pack: 14 rules (~130 lines in AGENTS.md) + 5 skills with references
 - [x] Packs bundled in the wheel (`src/praxis/packs/`); `praxis packs` and `praxis init <pack>`
-- Known gaps (deferred): skill files aren't deleted when a skill is removed from the source;
-  skills support only `references/**/*.md` (no `scripts/` or `assets/` yet)
+- Known gap (deferred): skills support only `references/**/*.md` (no `scripts/` or `assets/` yet)
 
 ### Phase 3 — Scoped adapters (done)
 - [x] Cursor adapter: glob rules → `.cursor/rules/praxis-<id>.mdc` (`globs`, `alwaysApply: false`);
@@ -117,7 +116,9 @@ Rules render in file-name order, so numeric prefixes control ordering.
 - [x] Default targets are `agents,claude`; `cursor` and `copilot` are opt-in
 - Trade-off: glob-scoped rules also appear in `AGENTS.md` (for tools without scoping), so Cursor and
   Copilot see them both always-on and scoped
-- Known gap (deferred): generated `.mdc` / `.instructions.md` files aren't deleted when a rule is removed
+- [x] Stale cleanup: `sync` deletes owned files (marked with the generated notice) that are no longer
+      produced, prunes empty folders, and removes managed blocks no longer produced; `check` reports them
+- Known gap: only the targets being synced are cleaned; dropping a target leaves its files behind
 
 ### Phase 4 — Verification
 - [ ] Check agent output against rules: deterministic graders first, LLM-judge rubrics second

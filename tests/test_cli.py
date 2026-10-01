@@ -1,3 +1,4 @@
+import shutil
 from pathlib import Path
 
 import pytest
@@ -135,3 +136,35 @@ def test_sync_cursor_and_copilot_targets(project):
     assert "simplest workflow" in (project / ".github/copilot-instructions.md").read_text()
     assert not (project / "CLAUDE.md").exists()
     assert run(project, "check", "--target", "cursor,copilot") == 0
+
+
+def test_removed_skill_is_reported_stale_then_deleted(tmp_path, capsys):
+    main(["init", "agent-engineering", "--root", str(tmp_path)])
+    run(tmp_path, "sync")
+    shutil.rmtree(tmp_path / ".praxis" / "skills" / "rag-pipeline")
+    capsys.readouterr()
+
+    assert run(tmp_path, "check") == 1
+    assert "stale: .agents/skills/rag-pipeline/SKILL.md" in capsys.readouterr().out
+
+    assert run(tmp_path, "sync") == 0
+    out = capsys.readouterr().out
+    assert "removed .claude/skills/rag-pipeline/references/fields-and-diagnostics.md" in out
+    assert not (tmp_path / ".agents/skills/rag-pipeline").exists()
+    assert not (tmp_path / ".claude/skills/rag-pipeline").exists()
+    assert run(tmp_path, "check") == 0
+
+
+def test_removed_glob_rule_deletes_cursor_and_copilot_files(project):
+    rule = project / ".praxis" / "rules" / "020-loops.md"
+    rule.write_text("---\nscope: glob\nglobs: ['*.py']\n---\nCap.\n", encoding="utf-8")
+    run(project, "sync", "--target", "cursor,copilot")
+
+    rule.unlink()
+    (project / ".praxis" / "rules" / "010-simplest.md").unlink()
+    (project / ".praxis" / "skills").mkdir()
+    assert run(project, "sync", "--target", "cursor,copilot") == 0
+
+    assert not (project / ".cursor/rules/praxis-loops.mdc").exists()
+    assert not (project / ".github/instructions/praxis-loops.instructions.md").exists()
+    assert not (project / ".github/copilot-instructions.md").exists()

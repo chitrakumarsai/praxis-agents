@@ -67,8 +67,13 @@ reads both `AGENTS.md` and `copilot-instructions.md`, so some rules reach it twi
     praxis check                    # exit 1 if generated files are stale (for CI)
 
 In `AGENTS.md` and `CLAUDE.md`, praxis only edits the section between `<!-- praxis:begin -->` and
-`<!-- praxis:end -->`; anything you write outside it is kept. Skill files are owned by praxis and
-marked with a generated-file comment; praxis refuses to overwrite a skill file it didn't write.
+`<!-- praxis:end -->`; anything you write outside it is kept. Skill, Cursor, and Copilot instruction
+files are owned by praxis and marked with a generated-file comment; praxis refuses to overwrite a
+file it didn't write.
+
+When you remove a rule or skill from the source, `praxis sync` deletes the files it generated for it
+(and `praxis check` reports them as stale). Only the targets you sync are cleaned: if you stop using
+a target, delete its files yourself.
 
 ## Development
 
