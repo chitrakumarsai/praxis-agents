@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from praxis.loader import PackError, load_pack, parse_rule
-from praxis.model import Reference, Rule, Skill
+from praxis.model import ForbidCheck, Reference, Rule, RunCheck, Skill
 
 SOURCE = Path("rules/020-bounded-loops.md")
 
@@ -266,3 +266,44 @@ def test_globs_accept_common_patterns(glob):
     rule_file = f"---\nscope: glob\nglobs: {json.dumps([glob])}\n---\nBody"
 
     assert parse_rule(rule_file, SOURCE).globs == (glob,)
+
+
+def test_rule_reads_checks():
+    text = (
+        "---\nchecks:\n"
+        "  - forbid: 'while True:'\n    message: loops need a cap\n"
+        "  - run: uv run pytest -q 'tests/my agents'\n"
+        "---\nBody"
+    )
+
+    assert parse_rule(text, SOURCE).checks == (
+        ForbidCheck(pattern="while True:", message="loops need a cap"),
+        RunCheck(command=("uv", "run", "pytest", "-q", "tests/my agents")),
+    )
+
+
+@pytest.mark.parametrize(
+    ("checks", "message"),
+    [
+        ("checks: nope", "'checks' must be a list"),
+        ("checks: [nope]", "check 1 must be a mapping"),
+        ("checks: [{message: x}]", "check 1 needs exactly one of 'forbid' or 'run'"),
+        ("checks: [{forbid: a, run: b}]", "check 1 needs exactly one of 'forbid' or 'run'"),
+        ("checks: [{forbid: a, when: b}]", "check 1 has unknown key(s): when"),
+        ("checks: [{forbid: '('}]", "check 1 has an invalid regex"),
+        ("checks: [{forbid: ''}]", "check 1 'forbid' must be a non-empty string"),
+        ("checks: [{run: \"echo 'open\"}]", "check 1 'run' can't be parsed"),
+        ("checks: [{run: '  '}]", "check 1 'run' must be a non-empty string"),
+        ("checks: [{forbid: a, message: 3}]", "check 1 'message' must be a string"),
+    ],
+)
+def test_invalid_checks_raise(checks, message):
+    with pytest.raises(PackError) as exc:
+        parse_rule(f"---\n{checks}\n---\nBody", SOURCE)
+
+    assert message in str(exc.value)
+
+
+def test_globs_must_compile():
+    with pytest.raises(PackError, match="invalid glob"):
+        parse_rule("---\nscope: glob\nglobs: ['src/[z-a].py']\n---\nBody", SOURCE)

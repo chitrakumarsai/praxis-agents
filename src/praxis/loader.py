@@ -6,15 +6,30 @@ Layout: ``rules/*.md`` and, optionally, ``skills/<name>/SKILL.md`` with ``refere
 from __future__ import annotations
 
 import re
+import shlex
 from pathlib import Path
 from typing import Any
 
 import yaml
 
-from praxis.model import BEGIN_MARKER, END_MARKER, SCOPES, Pack, Reference, Rule, Skill
+from praxis.globs import compile_glob
+from praxis.model import (
+    BEGIN_MARKER,
+    END_MARKER,
+    SCOPES,
+    Check,
+    ForbidCheck,
+    Pack,
+    Reference,
+    Rule,
+    RunCheck,
+    Skill,
+)
 
 FENCE = "---"
-RULE_KEYS = frozenset({"id", "scope", "globs"})
+RULE_KEYS = frozenset({"id", "scope", "globs", "checks"})
+CHECK_KINDS = ("forbid", "run")
+CHECK_KEYS = frozenset({*CHECK_KINDS, "message"})
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ORDER_PREFIX = re.compile(r"^(\d+)-")
 # Cursor and Copilot join globs with commas, so a glob itself can't contain one. Cursor's `globs`
@@ -73,7 +88,53 @@ def parse_rule(text: str, source: Path) -> Rule:
 
     globs = _parse_globs(meta.get("globs"), scope, source)
 
-    return Rule(id=rule_id, body=_clean_body(body, "rule", source), scope=scope, globs=globs)
+    return Rule(
+        id=rule_id,
+        body=_clean_body(body, "rule", source),
+        scope=scope,
+        globs=globs,
+        checks=_parse_checks(meta.get("checks"), source),
+    )
+
+
+def _parse_checks(raw: Any, source: Path) -> tuple[Check, ...]:
+    if raw is None:
+        return ()
+    if not isinstance(raw, list):
+        raise PackError(f"{source}: 'checks' must be a list")
+    return tuple(
+        _parse_check(item, f"{source}: check {index}") for index, item in enumerate(raw, 1)
+    )
+
+
+def _parse_check(item: Any, where: str) -> Check:
+    if not isinstance(item, dict):
+        raise PackError(f"{where} must be a mapping")
+    unknown = sorted(str(key) for key in item if key not in CHECK_KEYS)
+    if unknown:
+        raise PackError(f"{where} has unknown key(s): {', '.join(unknown)}")
+    kinds = [kind for kind in CHECK_KINDS if kind in item]
+    if len(kinds) != 1:
+        raise PackError(f"{where} needs exactly one of 'forbid' or 'run'")
+    message = item.get("message", "")
+    if not isinstance(message, str):
+        raise PackError(f"{where} 'message' must be a string")
+
+    (kind,) = kinds
+    value = item[kind]
+    if not isinstance(value, str) or not value.strip():
+        raise PackError(f"{where} '{kind}' must be a non-empty string")
+    if kind == "forbid":
+        try:
+            re.compile(value)
+        except re.error as exc:
+            raise PackError(f"{where} has an invalid regex: {exc}") from exc
+        return ForbidCheck(pattern=value, message=message)
+    try:
+        command = tuple(shlex.split(value))
+    except ValueError as exc:
+        raise PackError(f"{where} 'run' can't be parsed: {exc}") from exc
+    return RunCheck(command=command, message=message)
 
 
 def _reject_unknown_keys(meta: dict[str, Any], allowed: frozenset[str], source: Path) -> None:
@@ -106,6 +167,11 @@ def _parse_globs(raw: Any, scope: str, source: Path) -> tuple[str, ...]:
         )
     if not raw:
         raise PackError(f"{source}: scope 'glob' requires a non-empty 'globs' list")
+    for glob in raw:
+        try:
+            compile_glob(glob)
+        except re.error as exc:
+            raise PackError(f"{source}: invalid glob {glob!r}: {exc}") from exc
     return tuple(raw)
 
 
@@ -202,7 +268,11 @@ def load_pack(root: Path) -> Pack:
         seen.add(rule.id)
 
     skill_dirs = (
-        sorted(path for path in skills_dir.iterdir() if path.is_dir() and not path.name.startswith("."))
+        sorted(
+            path
+            for path in skills_dir.iterdir()
+            if path.is_dir() and not path.name.startswith(".")
+        )
         if skills_dir.is_dir()
         else []
     )

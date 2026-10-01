@@ -75,6 +75,39 @@ When you remove a rule or skill from the source, `praxis sync` deletes the files
 (and `praxis check` reports them as stale). Only the targets you sync are cleaned: if you stop using
 a target, delete its files yourself.
 
+## Verify
+
+Rules can carry deterministic checks that `praxis verify` runs against the lines your change added
+since it diverged from a base branch (commits, uncommitted edits, and untracked files):
+
+```markdown
+---
+scope: glob
+globs: ["**/agents/**"]
+checks:
+  - forbid: 'while\s+True'          # Python regex, matched against added lines
+    message: loops need an iteration cap
+  - run: uv run pytest -q tests/agents   # runs without a shell when the change touches the scope
+---
+Agent loops read their iteration cap from config.
+```
+
+    praxis verify                 # compare with main
+    praxis verify --base HEAD~1
+
+    FAIL agent-loops
+      src/agents/loop.py:2: forbidden /while\s+True/ (loops need an iteration cap)
+    1 failed, 0 passed, 0 skipped, 14 unchecked
+
+It exits 1 when a check fails, so it can gate CI or a pre-commit hook. Rules without checks are
+counted as unchecked. The praxis source and generated files are never checked.
+
+- `run` checks execute commands from the rule files on the branch being verified, the same trust
+  level as a Makefile. Review rule changes like code, and don't run `praxis verify` on untrusted
+  pull requests in CI with secrets available.
+- `forbid` patterns are Python regexes from your rule files; only the first 10,000 characters of each
+  line are searched, and untracked files over 1 MB are skipped.
+
 ## Development
 
 This project uses [uv](https://docs.astral.sh/uv/):

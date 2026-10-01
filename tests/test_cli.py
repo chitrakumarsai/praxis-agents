@@ -2,6 +2,7 @@ import shutil
 from pathlib import Path
 
 import pytest
+from conftest import git
 
 from praxis.cli import main
 
@@ -168,3 +169,65 @@ def test_removed_glob_rule_deletes_cursor_and_copilot_files(project):
     assert not (project / ".cursor/rules/praxis-loops.mdc").exists()
     assert not (project / ".github/instructions/praxis-loops.instructions.md").exists()
     assert not (project / ".github/copilot-instructions.md").exists()
+
+
+LOOP_RULE = """---
+scope: glob
+globs: ["**/agents/**"]
+checks:
+  - forbid: 'while True:'
+    message: loops need an iteration cap
+---
+Cap every loop.
+"""
+
+
+@pytest.fixture
+def verify_repo(tmp_path: Path) -> Path:
+    git(tmp_path, "init", "-q", "-b", "main")
+    (tmp_path / "README.md").write_text("demo\n", encoding="utf-8")
+    git(tmp_path, "add", ".")
+    git(tmp_path, "commit", "-q", "-m", "base")
+    git(tmp_path, "checkout", "-q", "-b", "feature")
+    rules = tmp_path / ".praxis" / "rules"
+    rules.mkdir(parents=True)
+    (rules / "010-loops.md").write_text(LOOP_RULE, encoding="utf-8")
+    (rules / "020-prose.md").write_text("Be kind.\n", encoding="utf-8")
+    return tmp_path
+
+
+def test_verify_fails_on_forbidden_added_line(verify_repo, capsys):
+    agents = verify_repo / "src" / "agents"
+    agents.mkdir(parents=True)
+    (agents / "loop.py").write_text("def run():\n    while True:\n        pass\n", encoding="utf-8")
+
+    assert run(verify_repo, "verify") == 1
+
+    out = capsys.readouterr().out
+    assert "FAIL loops" in out
+    assert "src/agents/loop.py:2: forbidden /while True:/ (loops need an iteration cap)" in out
+    assert "1 failed, 0 passed, 0 skipped, 1 unchecked" in out
+
+
+def test_verify_passes_and_ignores_praxis_source_and_generated_files(verify_repo, capsys):
+    run(verify_repo, "sync")  # AGENTS.md now contains rule text, but generated files are excluded
+    (verify_repo / "src" / "agents").mkdir(parents=True)
+    (verify_repo / "src" / "agents" / "loop.py").write_text("for _ in range(3):\n    pass\n")
+
+    assert run(verify_repo, "verify") == 0
+
+    out = capsys.readouterr().out
+    assert "PASS loops" in out
+    assert "0 failed, 1 passed, 0 skipped, 1 unchecked" in out
+
+
+def test_verify_skips_rules_without_changes_in_scope(verify_repo, capsys):
+    assert run(verify_repo, "verify") == 0
+
+    assert "SKIP loops (no changed files in scope)" in capsys.readouterr().out
+
+
+def test_verify_unknown_base_exits_2(verify_repo, capsys):
+    assert run(verify_repo, "verify", "--base", "nope") == 2
+
+    assert "unknown base 'nope'" in capsys.readouterr().err

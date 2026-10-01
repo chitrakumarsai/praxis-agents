@@ -120,9 +120,13 @@ Rules render in file-name order, so numeric prefixes control ordering.
       produced, prunes empty folders, and removes managed blocks no longer produced; `check` reports them
 - Known gap: only the targets being synced are cleaned; dropping a target leaves its files behind
 
-### Phase 4 — Verification
-- [ ] Check agent output against rules: deterministic graders first, LLM-judge rubrics second
-      (per the evals guide)
+### Phase 4 — Verification (deterministic checks done)
+- [x] `checks:` in rule frontmatter: `forbid` (regex on added lines) and `run` (command, no shell)
+- [x] `praxis verify [--base main]`: git diff from the merge-base plus untracked files; glob-scoped
+      rules see only matching files; praxis source and generated files excluded; exit 1 on failure
+- [ ] LLM judge: grade the change against each rule's text with an evidence-based rubric and an
+      `unknown` option; optional extra, needs an API key (follow-up)
+- Known limits: project root must be the git top level; `run` checks trust the rule files
 
 ## Open decisions
 

@@ -4,17 +4,22 @@ from __future__ import annotations
 
 import argparse
 import sys
+from collections import Counter
 from collections.abc import Sequence
 from pathlib import Path
 
 from praxis import __version__
 from praxis.adapters import DEFAULT_TARGETS, TARGETS, resolve_targets
 from praxis.bundled import available_packs, install_pack
+from praxis.gitdiff import added_lines
 from praxis.loader import load_pack
 from praxis.sync import FileChange, apply, plan, plan_stale
+from praxis.verify import RuleResult, exclude_paths, verify
 
 DEFAULT_SOURCE = Path(".praxis")
+DEFAULT_BASE = "main"
 EXIT_OK, EXIT_STALE, EXIT_ERROR = 0, 1, 2
+EXIT_FAILED = EXIT_STALE
 
 COMPILE_COMMANDS = {
     "sync": "Write instruction files and skills for each target.",
@@ -59,6 +64,13 @@ def build_parser() -> argparse.ArgumentParser:
 
     packs_help = "List bundled packs."
     commands.add_parser("packs", help=packs_help, description=packs_help)
+
+    verify_help = "Run rule checks against lines added since the base branch; exit 1 on failure."
+    verify_command = commands.add_parser("verify", help=verify_help, description=verify_help)
+    _add_location_arguments(verify_command)
+    verify_command.add_argument(
+        "--base", default=DEFAULT_BASE, help=f"git ref to compare against (default: {DEFAULT_BASE})"
+    )
     return parser
 
 
@@ -96,6 +108,8 @@ def run_command(args: argparse.Namespace) -> int:
     if args.command == "packs":
         print("\n".join(available_packs()))
         return EXIT_OK
+    if args.command == "verify":
+        return run_verify(args.root, args.source, args.base)
     if args.command == "init":
         install_pack(args.pack, args.root / args.source)
         print(f"installed pack '{args.pack}' into {args.source}; run `praxis sync` next")
@@ -105,6 +119,33 @@ def run_command(args: argparse.Namespace) -> int:
     if args.command == "check":
         return report_check(changes)
     return report_sync(changes, apply(changes))
+
+
+def run_verify(root: Path, source: Path, base: str) -> int:
+    pack = load_pack(root / source)
+    # Rule files and generated instruction files quote rule text; never check them.
+    generated = [
+        path for target in TARGETS.values() for path in (*target.owned_dirs, *target.managed_paths)
+    ]
+    source_prefix = [] if source.is_absolute() else [source.as_posix()]
+    changes = exclude_paths(added_lines(root, base), [*source_prefix, *generated])
+    return report_verify(verify(pack, changes, root))
+
+
+def report_verify(results: Sequence[RuleResult]) -> int:
+    for result in results:
+        if result.status == "skip":
+            print(f"SKIP {result.rule_id} ({'; '.join(result.details)})")
+        elif result.status in ("pass", "fail"):
+            print(f"{result.status.upper()} {result.rule_id}")
+            for detail in result.details:
+                print("\n".join(f"  {line}" for line in detail.splitlines()))
+    counts = Counter(result.status for result in results)
+    print(
+        f"{counts['fail']} failed, {counts['pass']} passed, {counts['skip']} skipped, "
+        f"{counts['unchecked']} unchecked"
+    )
+    return EXIT_FAILED if counts["fail"] else EXIT_OK
 
 
 def report_sync(changes: Sequence[FileChange], written: Sequence[Path]) -> int:
