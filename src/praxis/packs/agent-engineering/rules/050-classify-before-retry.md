@@ -1,3 +1,8 @@
+---
+checks:
+  - forbid: '^\s*@(?:tenacity\.)?retry(?:\(\s*\))?\s*$'
+    message: a bare @retry retries forever; set stop= and wait=
+---
 ### Classify failures before retrying
 
 - Transient/rate-limit errors on safe operations: bounded exponential backoff with jitter,

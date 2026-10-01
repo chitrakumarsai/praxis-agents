@@ -124,6 +124,8 @@ Rules render in file-name order, so numeric prefixes control ordering.
 - [x] `checks:` in rule frontmatter: `forbid` (regex on added lines) and `run` (command, no shell)
 - [x] `praxis verify [--base main]`: git diff from the merge-base plus untracked files; glob-scoped
       rules see only matching files; praxis source and generated files excluded; exit 1 on failure
+- [x] Bundled pack checks: `forbid` checks on 3 rules (bare retry, swallowed errors, secrets, and
+      shell execution), each tested against known-bad and known-good lines like any grader
 - [ ] LLM judge: grade the change against each rule's text with an evidence-based rubric and an
       `unknown` option; optional extra, needs an API key (follow-up)
 - Known limits: project root must be the git top level; `run` checks trust the rule files

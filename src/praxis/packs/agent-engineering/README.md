@@ -16,6 +16,20 @@ evaluation, RAG, and structured extraction.
 
 Edit the copy in `.praxis/` to fit your project; it's yours from then on.
 
+## Checks
+
+Three rules carry `forbid` checks that `praxis verify` runs against the lines a change adds:
+
+| Rule | Flags |
+|---|---|
+| `classify-before-retry` | A bare `@retry` / `@retry()` decorator, which retries forever |
+| `tool-contracts` | A bare `except:`, and `except Exception: pass` (or `...`) on one line |
+| `untrusted-content` | Private keys; Anthropic, OpenAI, GitHub, AWS, and Slack tokens; `shell` set to `True` |
+
+The other rules are principles that need judgment, so they're reported as unchecked. The pack ships
+no `run` checks: commands are project-specific, so add your own in `.praxis/`. If a check is noisy
+for your project (for example, test fixtures with fake keys), narrow or delete it in your copy.
+
 ## Sources
 
 Distilled from the author's own guides, which build on these articles:

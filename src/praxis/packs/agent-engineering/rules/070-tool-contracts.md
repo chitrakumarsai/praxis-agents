@@ -1,3 +1,10 @@
+---
+checks:
+  - forbid: '^\s*except\s*:'
+    message: a bare except hides tool failures; catch specific errors
+  - forbid: '^\s*except\s+(?:Base)?Exception\b[^:]*:\s*(?:pass|\.\.\.)\s*(?:#.*)?$'
+    message: a swallowed error looks like an empty result; return a structured error
+---
 ### Design tools as narrow, explicit contracts
 
 - Every tool states its purpose, typed inputs (units, bounds, identifiers), stable output schema,
