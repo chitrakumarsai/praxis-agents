@@ -1,7 +1,8 @@
-"""Optional LLM judge: Claude grades a change against rules that have no deterministic checks.
+"""Optional LLM judge: a model grades a change against rules that have no deterministic checks.
 
-Needs the ``judge`` extra (``praxis-agents[judge]``) and Anthropic credentials. Verdicts are
-advisory: a judge is a grader that hasn't been calibrated on this project's cases.
+The core here is provider-neutral: it builds requests, enforces the size limit, and grounds
+verdicts in the diff. Backends (``anthropic_backend``, ``openai_backend``) only send a request and
+report how it ended. Verdicts are advisory: the judge hasn't been calibrated on project cases.
 """
 
 from __future__ import annotations
@@ -13,14 +14,13 @@ import unicodedata
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass
-from typing import Any, Literal
+from typing import Literal, Protocol
 
 from praxis.model import Rule
 
-DEFAULT_MODEL = "claude-opus-5-5"
+PROVIDERS = ("anthropic", "openai")
+DEFAULT_PROVIDER = "anthropic"
 DEFAULT_EFFORT = "medium"
-# Server-side refusal fallback: a declined request is retried on a model chosen by category.
-FALLBACK_BETA = "server-side-fallback-2026-07-01"
 MAX_OUTPUT_TOKENS = 16_000
 MAX_INPUT_TOKENS = 200_000  # refuse rather than silently truncate a huge diff
 MAX_PARALLEL_REQUESTS = 4
@@ -74,18 +74,54 @@ class Verdict:
     evidence: tuple[str, ...] = ()
 
 
+@dataclass(frozen=True)
+class JudgeRequest:
+    """One rule's request. ``system`` and ``diff_text`` are identical across a run (cacheable)."""
+
+    system: str
+    diff_text: str
+    rule_text: str
+    cache_key: str
+
+
+@dataclass(frozen=True)
+class Completion:
+    text: str
+    ending: Literal["done", "refused", "truncated"] = "done"
+
+
+class Backend(Protocol):
+    provider: str
+    model: str
+
+    def input_tokens(self, request: JudgeRequest) -> int: ...
+
+    def complete(self, request: JudgeRequest) -> Completion:
+        """Send ``request``; raise :class:`JudgeError` if the API call fails."""
+        ...
+
+
+def make_backend(provider: str, model: str | None = None, effort: str = DEFAULT_EFFORT) -> Backend:
+    """Build the backend for ``provider`` with its SDK's default client and credentials."""
+    if provider == "anthropic":
+        from praxis.judge.anthropic_backend import AnthropicBackend
+
+        return AnthropicBackend(model=model, effort=effort)
+    if provider == "openai":
+        from praxis.judge.openai_backend import OpenAIBackend
+
+        return OpenAIBackend(model=model, effort=effort)
+    raise JudgeError(f"unknown judge provider {provider!r}; expected one of {', '.join(PROVIDERS)}")
+
+
 def clean_text(text: str) -> str:
     """Replace control characters (including ANSI escapes and newlines) with spaces."""
     return "".join(" " if unicodedata.category(char) == "Cc" else char for char in text)
 
 
 class Judge:
-    def __init__(
-        self, client: Any = None, model: str = DEFAULT_MODEL, effort: str = DEFAULT_EFFORT
-    ) -> None:
-        self._client = client if client is not None else _default_client()
-        self._model = model
-        self._effort = effort
+    def __init__(self, backend: Backend) -> None:
+        self._backend = backend
 
     def grade(
         self, rules: Sequence[Rule], diff: str, scope: Mapping[str, Sequence[str]]
@@ -95,11 +131,11 @@ class Judge:
         if not graded or not diff.strip():
             return ()
         # A per-run nonce in the tags means content in the diff can't close them; it's the same
-        # for every request in the run, so the cached prefix (system + diff) stays identical.
+        # for every request in the run, so the cacheable prefix (system + diff) stays identical.
         nonce = secrets.token_hex(8)
-        requests = [self._request(rule, diff, scope[rule.id], nonce) for rule in graded]
+        requests = [_build_request(rule, diff, scope[rule.id], nonce) for rule in graded]
         self._check_size(requests[0])
-        # The first request writes the cache and fails fast (e.g. bad credentials); a later
+        # The first request warms the cache and fails fast (e.g. bad credentials); a later
         # failure only makes that rule's verdict unknown.
         first = self._grade_one(graded[0].id, requests[0], diff)
         with ThreadPoolExecutor(max_workers=MAX_PARALLEL_REQUESTS) as pool:
@@ -110,106 +146,48 @@ class Judge:
             )
             return (first, *rest)
 
-    def _request(
-        self, rule: Rule, diff: str, paths: Sequence[str], nonce: str
-    ) -> dict[str, Any]:
-        diff_tag, rule_tag = f"diff-{nonce}", f"rule-{nonce}"
-        files = "\n".join(f"- {clean_text(path)}" for path in paths)
-        rule_text = (
-            f'<{rule_tag} id="{rule.id}">\n{rule.body}\n</{rule_tag}>\n\n'
-            f"Changed files this rule applies to:\n{files}\n\nGrade the change against this rule."
-        )
-        return {
-            "model": self._model,
-            "max_tokens": MAX_OUTPUT_TOKENS,
-            "system": SYSTEM_PROMPT.format(diff_tag=diff_tag, rule_tag=rule_tag),
-            "messages": [
-                {
-                    "role": "user",
-                    "content": [
-                        {
-                            "type": "text",
-                            "text": f"<{diff_tag}>\n{diff}</{diff_tag}>",
-                            "cache_control": {"type": "ephemeral"},
-                        },
-                        {"type": "text", "text": rule_text},
-                    ],
-                }
-            ],
-            "output_config": {
-                "effort": self._effort,
-                "format": {"type": "json_schema", "schema": VERDICT_SCHEMA},
-            },
-        }
-
-    def _check_size(self, request: Mapping[str, Any]) -> None:
-        texts = [request["system"], *(block["text"] for block in request["messages"][0]["content"])]
+    def _check_size(self, request: JudgeRequest) -> None:
+        texts = (request.system, request.diff_text, request.rule_text)
         if sum(len(text.encode("utf-8")) for text in texts) < MAX_INPUT_TOKENS:
             return  # a token is at least one byte, so this input can't exceed the limit
-        counted = self._call(
-            self._client.messages.count_tokens,
-            model=request["model"],
-            system=request["system"],
-            messages=request["messages"],
-        )
-        if counted.input_tokens > MAX_INPUT_TOKENS:
+        tokens = self._backend.input_tokens(request)
+        if tokens > MAX_INPUT_TOKENS:
             raise JudgeError(
-                f"the change is {counted.input_tokens:,} tokens, over the judge's limit of "
+                f"the change is {tokens:,} tokens, over the judge's limit of "
                 f"{MAX_INPUT_TOKENS:,}; compare against a closer --base or split the change"
             )
 
-    def _grade_one(self, rule_id: str, request: Mapping[str, Any], diff: str) -> Verdict:
-        response = self._call(
-            self._client.beta.messages.create,
-            **request,
-            betas=[FALLBACK_BETA],
-            fallbacks="default",
-        )
-        return _parse_verdict(rule_id, response, diff)
+    def _grade_one(self, rule_id: str, request: JudgeRequest, diff: str) -> Verdict:
+        return _parse_verdict(rule_id, self._backend.complete(request), diff)
 
-    def _grade_or_unknown(self, rule_id: str, request: Mapping[str, Any], diff: str) -> Verdict:
+    def _grade_or_unknown(self, rule_id: str, request: JudgeRequest, diff: str) -> Verdict:
         try:
             return self._grade_one(rule_id, request, diff)
         except JudgeError as exc:
             return Verdict(rule_id, "unknown", str(exc))
 
-    @staticmethod
-    def _call(method: Any, **kwargs: Any) -> Any:
-        try:
-            return method(**kwargs)
-        except _api_errors() as exc:  # the SDK already retried 429s, 5xx, and timeouts
-            raise JudgeError(f"judge request failed: {exc}") from exc
+
+def _build_request(rule: Rule, diff: str, paths: Sequence[str], nonce: str) -> JudgeRequest:
+    diff_tag, rule_tag = f"diff-{nonce}", f"rule-{nonce}"
+    files = "\n".join(f"- {clean_text(path)}" for path in paths)
+    return JudgeRequest(
+        system=SYSTEM_PROMPT.format(diff_tag=diff_tag, rule_tag=rule_tag),
+        diff_text=f"<{diff_tag}>\n{diff}</{diff_tag}>",
+        rule_text=(
+            f'<{rule_tag} id="{rule.id}">\n{rule.body}\n</{rule_tag}>\n\n'
+            f"Changed files this rule applies to:\n{files}\n\nGrade the change against this rule."
+        ),
+        cache_key=f"praxis-judge-{nonce}",
+    )
 
 
-def _api_errors() -> tuple[type[BaseException], ...]:
-    try:
-        import anthropic
-    except ImportError:  # an injected client without the SDK; let its errors propagate
-        return ()
-    return (anthropic.APIError,)
-
-
-def _default_client() -> Any:
-    try:
-        import anthropic
-    except ImportError as exc:
-        raise JudgeError(
-            "the LLM judge needs the Anthropic SDK: install praxis-agents[judge] "
-            "(or `uv sync --extra judge` in a checkout)"
-        ) from exc
-    return anthropic.Anthropic()
-
-
-def _parse_verdict(rule_id: str, response: Any, diff: str) -> Verdict:
-    stop_reason = getattr(response, "stop_reason", None)
-    if stop_reason == "refusal":
+def _parse_verdict(rule_id: str, completion: Completion, diff: str) -> Verdict:
+    if completion.ending == "refused":
         return Verdict(rule_id, "unknown", "the judge declined to grade this rule")
-    if stop_reason == "max_tokens":
+    if completion.ending == "truncated":
         return Verdict(rule_id, "unknown", "the judge's answer was cut off")
-    blocks = getattr(response, "content", None) or []
-    text = next((getattr(b, "text", "") for b in blocks if getattr(b, "type", None) == "text"), "")
     try:
-        data = json.loads(text)
+        data = json.loads(completion.text)
         status, explanation, evidence = data["status"], data["explanation"], data["evidence"]
     except (json.JSONDecodeError, KeyError, TypeError):
         return Verdict(rule_id, "unknown", "the judge returned an invalid verdict")

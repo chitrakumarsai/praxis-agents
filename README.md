@@ -110,25 +110,32 @@ counted as unchecked. The praxis source and generated files are never checked.
 
 ### LLM judge (optional)
 
-Most rules are principles a regex can't check. `--judge` has Claude grade the change against each
-rule without checks that touches a changed file:
+Most rules are principles a regex can't check. `--judge` has an LLM grade the change against each
+rule without checks that touches a changed file. Two providers are supported:
 
-    uv tool install 'praxis-agents[judge]'     # or: uv sync --extra judge
+| Provider | Install | Credentials | Default model |
+|---|---|---|---|
+| `anthropic` (default) | `praxis-agents[judge]` | `ANTHROPIC_API_KEY` or an `ant auth login` profile | `claude-opus-5-5` |
+| `openai` | `praxis-agents[judge-openai]` | `OPENAI_API_KEY` | `gpt-6.1-sol` |
+
     praxis verify --judge
     praxis verify --judge --judge-model claude-sonnet-5-5
+    praxis verify --judge --judge-provider openai --judge-model gpt-6-astra
+
+praxis doesn't load `.env` files itself. Copy `.env.example` to `.env` (it's git-ignored), fill it
+in, and export it into the shell first: `set -a; . ./.env; set +a`.
 
     JUDGE FAIL human-handoff
       Approval is read from the model's own output instead of a recorded approval.
       src/agents/approve.py:14: if plan.approved:
     judge (claude-opus-5-5, advisory): 1 failed, 2 passed, 0 unknown, 8 not applicable
 
-- Uses your Anthropic credentials (`ANTHROPIC_API_KEY` or an `ant auth login` profile) and costs
-  one request per graded rule; the diff is cached and shared across those requests.
+- Costs one request per graded rule; the diff is a shared prefix that both providers cache.
 - Verdicts are `pass`, `fail` (with `path:line` evidence), `not_applicable`, or `unknown`.
   Refusals, cut-off answers, and malformed output count as `unknown`, never `pass`.
 - Judge results are advisory and don't change the exit code: the judge hasn't been calibrated
   against your project's reviewed cases. Diffs over 200k tokens are refused rather than truncated.
-- The diff is sent to the API; the praxis source and generated files are left out of it.
+- The diff is sent to the provider's API; the praxis source and generated files are left out.
 
 ## Development
 

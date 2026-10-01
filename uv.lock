@@ -270,6 +270,23 @@ wheels = [
 ]
 
 [[package]]
+name = "openai"
+version = "3.22.1"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "anyio" },
+    { name = "httpx2" },
+    { name = "jiter" },
+    { name = "pydantic" },
+    { name = "sniffio" },
+    { name = "typing-extensions" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/e7/db/b135830095e2ae120ea04b0a53d3a1644eb65554385a8ef4c9cb4de3f5fd/openai-3.22.1.tar.gz", hash = "sha256:2575f961e4c1df8761f8eeb4d78e967de3f9b9f91b22f7120d60e393e970094d", size = 1751626 }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/32/74/e3b77d1157c8b9ad815a87d5719545097e5edb06156869c1657fbb6b797b/openai-3.22.1-py3-none-any.whl", hash = "sha256:43ff3de5457a8beb4afa177d4e0ba6841cfadd5219ebc62297fde6c8a9d401a6", size = 2090965 },
+]
+
+[[package]]
 name = "packaging"
 version = "26.3"
 source = { registry = "https://pypi.org/simple" }
@@ -298,20 +315,26 @@ dependencies = [
 [package.optional-dependencies]
 dev = [
     { name = "anthropic" },
+    { name = "openai" },
     { name = "pytest" },
 ]
 judge = [
     { name = "anthropic" },
+]
+judge-openai = [
+    { name = "openai" },
 ]
 
 [package.metadata]
 requires-dist = [
     { name = "anthropic", marker = "extra == 'dev'", specifier = ">=1.11.0" },
     { name = "anthropic", marker = "extra == 'judge'", specifier = ">=1.11.0" },
+    { name = "openai", marker = "extra == 'dev'", specifier = ">=3.22.1" },
+    { name = "openai", marker = "extra == 'judge-openai'", specifier = ">=3.22.1" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
-provides-extras = ["dev", "judge"]
+provides-extras = ["dev", "judge", "judge-openai"]
 
 [[package]]
 name = "pydantic"

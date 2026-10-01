@@ -21,10 +21,14 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
     "anthropic>=1.11.0",
+    "openai>=3.22.1",
     "pytest>=8",
 ]
 judge = [
     "anthropic>=1.11.0",
+]
+judge-openai = [
+    "openai>=3.22.1",
 ]
 
 [project.scripts]

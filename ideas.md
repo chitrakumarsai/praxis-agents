@@ -129,6 +129,8 @@ Rules render in file-name order, so numeric prefixes control ordering.
 - [x] LLM judge (`praxis verify --judge`, `judge` extra): one request per unchecked rule in scope,
       shared cached diff prefix, pass/fail/not_applicable/unknown with `path:line` evidence,
       refusal and malformed output -> unknown, token limit refuses instead of truncating; advisory
+- [x] OpenAI provider (`--judge-provider openai`, `judge-openai` extra): Responses API with a strict
+      JSON schema; same nonce tags, grounding, and size limit as the Anthropic backend
 - [ ] Calibrate the judge: reviewed pass/fail cases per rule, measure false accepts and rejects,
       then decide whether judge failures may gate the exit code
 - Known limits: project root must be the git top level; `run` checks trust the rule files

@@ -6,3 +6,8 @@ build/
 dist/
 .pytest_cache/
 .coverage
+
+# Local secrets: never commit. Copy .env.example to .env and fill it in.
+.env
+.env.*
+!.env.example

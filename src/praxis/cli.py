@@ -12,7 +12,7 @@ from praxis import __version__
 from praxis.adapters import DEFAULT_TARGETS, TARGETS, resolve_targets
 from praxis.bundled import available_packs, install_pack
 from praxis.gitdiff import added_lines, unified_diff
-from praxis.judge import DEFAULT_MODEL, Judge, Verdict, clean_text
+from praxis.judge import DEFAULT_PROVIDER, PROVIDERS, Judge, Verdict, clean_text, make_backend
 from praxis.loader import load_pack
 from praxis.sync import FileChange, apply, plan, plan_stale
 from praxis.verify import RuleResult, exclude_paths, paths_in_scope, verify
@@ -75,10 +75,15 @@ def build_parser() -> argparse.ArgumentParser:
     verify_command.add_argument(
         "--judge",
         action="store_true",
-        help="also have Claude grade rules without checks (advisory; needs praxis-agents[judge])",
+        help="also have an LLM grade rules without checks (advisory; needs the judge extra)",
     )
     verify_command.add_argument(
-        "--judge-model", help=f"judge model, with --judge (default: {DEFAULT_MODEL})"
+        "--judge-provider",
+        choices=PROVIDERS,
+        help=f"judge provider, with --judge (default: {DEFAULT_PROVIDER})",
+    )
+    verify_command.add_argument(
+        "--judge-model", help="judge model, with --judge (default: the provider's default)"
     )
     return parser
 
@@ -102,8 +107,11 @@ def plan_changes(root: Path, source: Path, target_list: str) -> tuple[FileChange
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
-    if args.command == "verify" and args.judge_model and not args.judge:
-        parser.error("--judge-model requires --judge")
+    if args.command == "verify" and not args.judge:
+        judge_flags = {"--judge-provider": args.judge_provider, "--judge-model": args.judge_model}
+        for flag, value in judge_flags.items():
+            if value:
+                parser.error(f"{flag} requires --judge")
     if args.command is None:
         parser.print_help()
         return EXIT_OK
@@ -120,8 +128,8 @@ def run_command(args: argparse.Namespace) -> int:
         print("\n".join(available_packs()))
         return EXIT_OK
     if args.command == "verify":
-        judge_model = (args.judge_model or DEFAULT_MODEL) if args.judge else None
-        return run_verify(args.root, args.source, args.base, judge_model)
+        judge = (args.judge_provider or DEFAULT_PROVIDER, args.judge_model) if args.judge else None
+        return run_verify(args.root, args.source, args.base, judge)
     if args.command == "init":
         install_pack(args.pack, args.root / args.source)
         print(f"installed pack '{args.pack}' into {args.source}; run `praxis sync` next")
@@ -141,21 +149,26 @@ def _praxis_paths(source: Path) -> list[str]:
     return [*([] if source.is_absolute() else [source.as_posix()]), *generated]
 
 
-def run_verify(root: Path, source: Path, base: str, judge_model: str | None = None) -> int:
-    """Run deterministic checks; with ``judge_model``, also run the advisory LLM judge."""
+def run_verify(
+    root: Path, source: Path, base: str, judge: tuple[str, str | None] | None = None
+) -> int:
+    """Run deterministic checks; with ``judge`` = (provider, model), also run the LLM judge."""
     excluded = _praxis_paths(source)
     pack = load_pack(root / source)
     changes = exclude_paths(added_lines(root, base), excluded)
     exit_code = report_verify(verify(pack, changes, root))
-    if judge_model:
+    if judge:
+        provider, model = judge
+        backend = make_backend(provider, model)
         rules = [rule for rule in pack.rules if not rule.checks]
         scope = {rule.id: paths_in_scope(rule, changes) for rule in rules}
-        verdicts = Judge(model=judge_model).grade(rules, unified_diff(root, base, excluded), scope)
-        report_judge(verdicts, len(rules), judge_model)
+        verdicts = Judge(backend).grade(rules, unified_diff(root, base, excluded), scope)
+        report_judge(verdicts, len(rules), f"{backend.provider} {backend.model}")
     return exit_code
 
 
 def report_judge(verdicts: Sequence[Verdict], judged: int, model: str) -> None:
+    """Print verdicts; ``model`` is shown in the summary as "<provider> <model>"."""
     for verdict in verdicts:
         if verdict.status in ("pass", "fail", "unknown"):
             print(f"JUDGE {verdict.status.upper()} {verdict.rule_id}")
