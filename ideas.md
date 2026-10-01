@@ -50,10 +50,10 @@ Distillation is a **one-time, human-reviewed** step (LLM-assisted is fine), not 
 
 | Target | Always-on | Scoped / on-demand | Status |
 |---|---|---|---|
-| `agents` (Codex, Cursor, Copilot, most others) | `AGENTS.md` | — | Phase 1 |
-| `claude` | `CLAUDE.md` → `@AGENTS.md` import | `.claude/skills/` | Phase 1 (rules), Phase 2 (skills) |
-| `cursor` | `.cursor/rules/*.mdc` (`alwaysApply`) | `.mdc` with `globs` / `description` | Phase 3 |
-| `copilot` | `.github/copilot-instructions.md` | `.github/instructions/*.instructions.md` (`applyTo`) | Phase 3 |
+| `agents` (Codex, Cursor, Copilot, most others) | `AGENTS.md` | `.agents/skills/` | Done (default) |
+| `claude` | `CLAUDE.md` → `@AGENTS.md` import | `.claude/skills/` | Done (default) |
+| `cursor` | via `AGENTS.md` | `.cursor/rules/praxis-<id>.mdc` (`globs`) | Done (opt-in) |
+| `copilot` | `.github/copilot-instructions.md` | `.github/instructions/praxis-<id>.instructions.md` (`applyTo`) | Done (opt-in) |
 
 Tool file paths change often. Each tool lives in its own adapter module; verify paths against
 current docs when writing an adapter.
@@ -109,9 +109,15 @@ Rules render in file-name order, so numeric prefixes control ordering.
 - Known gaps (deferred): skill files aren't deleted when a skill is removed from the source;
   skills support only `references/**/*.md` (no `scripts/` or `assets/` yet)
 
-### Phase 3 — Scoped adapters
-- [ ] Cursor `.mdc` adapter (globs → `globs`, always → `alwaysApply`)
-- [ ] Copilot adapter (globs → `applyTo`)
+### Phase 3 — Scoped adapters (done)
+- [x] Cursor adapter: glob rules → `.cursor/rules/praxis-<id>.mdc` (`globs`, `alwaysApply: false`);
+      always-on rules reach Cursor through `AGENTS.md`
+- [x] Copilot adapter: always-on rules → `.github/copilot-instructions.md` (managed block);
+      glob rules → `.github/instructions/praxis-<id>.instructions.md` (`applyTo`)
+- [x] Default targets are `agents,claude`; `cursor` and `copilot` are opt-in
+- Trade-off: glob-scoped rules also appear in `AGENTS.md` (for tools without scoping), so Cursor and
+  Copilot see them both always-on and scoped
+- Known gap (deferred): generated `.mdc` / `.instructions.md` files aren't deleted when a rule is removed
 
 ### Phase 4 — Verification
 - [ ] Check agent output against rules: deterministic graders first, LLM-judge rubrics second

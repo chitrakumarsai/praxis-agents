@@ -36,7 +36,7 @@ Always-on rules live in `.praxis/rules/*.md`, ordered by their numeric file-name
 ```markdown
 ---
 scope: glob                # always (default) | glob
-globs: ["**/agents/**"]    # required when scope is glob
+globs: ["**/agents/**"]    # required when scope is glob; no commas (write *.{ts,tsx} as two globs)
 ---
 Every agent loop has a max-iteration cap and a deterministic stop condition.
 ```
@@ -53,8 +53,16 @@ On-demand skills use the [Agent Skills](https://agentskills.io) format:
 |---|---|---|
 | `agents` | `AGENTS.md`, `.agents/skills/` | Codex, Cursor, GitHub Copilot, and others |
 | `claude` | `CLAUDE.md` (imports `AGENTS.md`), `.claude/skills/` | Claude Code |
+| `cursor` (opt-in) | `.cursor/rules/praxis-<id>.mdc` per glob-scoped rule | Cursor |
+| `copilot` (opt-in) | `.github/copilot-instructions.md`, `.github/instructions/praxis-<id>.instructions.md` per glob-scoped rule | GitHub Copilot Chat, code review, cloud agent |
 
-    praxis sync                     # all targets
+Cursor and Copilot already read `AGENTS.md` and `.agents/skills/`, so the default is `agents,claude`.
+Add `cursor` or `copilot` when you want glob-scoped rules to load only for matching files.
+Glob-scoped rules also stay in `AGENTS.md` for tools without scoping, and Copilot's coding agent
+reads both `AGENTS.md` and `copilot-instructions.md`, so some rules reach it twice.
+
+    praxis sync                     # default targets: agents, claude
+    praxis sync --target agents,claude,cursor,copilot
     praxis sync --target agents     # only AGENTS.md
     praxis check                    # exit 1 if generated files are stale (for CI)
 

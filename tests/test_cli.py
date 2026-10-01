@@ -119,3 +119,19 @@ def test_init_failure_leaves_no_partial_source(tmp_path, monkeypatch, capsys):
     assert main(["init", "agent-engineering", "--root", str(tmp_path)]) == 2
     assert not (tmp_path / ".praxis").exists()
     assert list(tmp_path.iterdir()) == []
+
+
+def test_sync_cursor_and_copilot_targets(project):
+    rules = project / ".praxis" / "rules"
+    (rules / "020-loops.md").write_text(
+        "---\nscope: glob\nglobs: ['**/agents/**']\n---\nCap every loop.\n", encoding="utf-8"
+    )
+
+    assert run(project, "sync", "--target", "cursor,copilot") == 0
+
+    assert (project / "AGENTS.md").is_file()
+    assert (project / ".cursor/rules/praxis-loops.mdc").is_file()
+    assert (project / ".github/instructions/praxis-loops.instructions.md").is_file()
+    assert "simplest workflow" in (project / ".github/copilot-instructions.md").read_text()
+    assert not (project / "CLAUDE.md").exists()
+    assert run(project, "check", "--target", "cursor,copilot") == 0

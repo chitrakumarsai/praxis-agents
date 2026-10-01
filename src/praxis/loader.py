@@ -17,7 +17,11 @@ FENCE = "---"
 RULE_KEYS = frozenset({"id", "scope", "globs"})
 ID_PATTERN = re.compile(r"^[a-z0-9]+(?:-[a-z0-9]+)*$")
 ORDER_PREFIX = re.compile(r"^(\d+)-")
-FORBIDDEN_GLOB_CHARS = frozenset("`\r\n")
+# Cursor and Copilot join globs with commas, so a glob itself can't contain one. Cursor's `globs`
+# value is unquoted YAML, so anything YAML would read as a comment, mapping, or tag is unsafe too.
+FORBIDDEN_GLOB_CHARS = frozenset('`,"')
+YAML_UNSAFE_GLOB_START = frozenset("#!&%@|>[{")
+YAML_UNSAFE_GLOB_SUBSTRINGS = (" #", ": ")
 
 SKILL_FILE = "SKILL.md"
 SKILL_KEYS = frozenset({"name", "description"})
@@ -95,14 +99,25 @@ def _parse_globs(raw: Any, scope: str, source: Path) -> tuple[str, ...]:
     if scope != "glob":
         raise PackError(f"{source}: 'globs' is only allowed with scope 'glob'")
     if not isinstance(raw, list) or not all(_is_valid_glob(glob) for glob in raw):
-        raise PackError(f"{source}: 'globs' must be a list of non-empty strings")
+        raise PackError(
+            f"{source}: 'globs' must be a list of plain glob strings: no surrounding spaces, "
+            "commas, quotes, backticks, control characters, ' #' or ': ', and no leading "
+            "#!&%@|>[{ (write '*.{ts,tsx}' as two globs)"
+        )
     if not raw:
         raise PackError(f"{source}: scope 'glob' requires a non-empty 'globs' list")
     return tuple(raw)
 
 
 def _is_valid_glob(glob: Any) -> bool:
-    return isinstance(glob, str) and bool(glob.strip()) and not FORBIDDEN_GLOB_CHARS & set(glob)
+    return (
+        isinstance(glob, str)
+        and bool(glob)
+        and glob == glob.strip()
+        and glob[0] not in YAML_UNSAFE_GLOB_START
+        and not any(part in glob for part in YAML_UNSAFE_GLOB_SUBSTRINGS)
+        and all(char.isprintable() and char not in FORBIDDEN_GLOB_CHARS for char in glob)
+    )
 
 
 def _rule_order(path: Path) -> tuple[float, str]:

@@ -5,7 +5,7 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
-from praxis.adapters import agents_md, claude
+from praxis.adapters import agents_md, claude, copilot, cursor
 from praxis.model import OutputFile, Pack
 
 
@@ -21,8 +21,14 @@ TARGETS: dict[str, Target] = {
     for target in (
         Target("agents", agents_md.render),
         Target("claude", claude.render, requires=("agents",)),
+        # Cursor reads always-on rules from AGENTS.md; its own files carry only glob-scoped rules.
+        Target("cursor", cursor.render, requires=("agents",)),
+        Target("copilot", copilot.render),
     )
 }
+
+# Cursor and Copilot already read AGENTS.md, so their native files are opt-in.
+DEFAULT_TARGETS: tuple[str, ...] = ("agents", "claude")
 
 
 def resolve_targets(names: Iterable[str]) -> tuple[Target, ...]:

@@ -8,7 +8,7 @@ from collections.abc import Sequence
 from pathlib import Path
 
 from praxis import __version__
-from praxis.adapters import TARGETS, resolve_targets
+from praxis.adapters import DEFAULT_TARGETS, TARGETS, resolve_targets
 from praxis.bundled import available_packs, install_pack
 from praxis.loader import load_pack
 from praxis.sync import FileChange, apply, plan
@@ -47,8 +47,9 @@ def build_parser() -> argparse.ArgumentParser:
         _add_location_arguments(command)
         command.add_argument(
             "--target",
-            default=",".join(TARGETS),
-            help=f"comma-separated targets: {', '.join(TARGETS)} (default: all)",
+            default=",".join(DEFAULT_TARGETS),
+            help=f"comma-separated targets: {', '.join(TARGETS)} "
+            f"(default: {','.join(DEFAULT_TARGETS)})",
         )
 
     init_help = "Copy a bundled pack into the source directory."

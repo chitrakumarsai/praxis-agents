@@ -1,3 +1,4 @@
+import json
 from pathlib import Path
 
 import pytest
@@ -91,7 +92,7 @@ def test_non_string_frontmatter_keys_raise_pack_error():
         parse_rule("---\n1: x\ntrue: y\n---\nBody", SOURCE)
 
 
-@pytest.mark.parametrize("yaml_glob", ['"src/`x`/*.py"', '"a\\nb"'])
+@pytest.mark.parametrize("yaml_glob", ['"src/`x`/*.py"', '"a\\nb"', '"*.{ts,tsx}"', "'say \"hi\"'"])
 def test_globs_reject_backticks_and_newlines(yaml_glob):
     with pytest.raises(PackError, match="'globs' must be a list"):
         parse_rule(f"---\nscope: glob\nglobs: [{yaml_glob}]\n---\nBody", SOURCE)
@@ -246,3 +247,22 @@ def test_load_pack_allows_skills_without_rules(tmp_path):
     pack = load_pack(tmp_path)
 
     assert pack.rules == () and [skill.name for skill in pack.skills] == ["eval-design"]
+
+
+@pytest.mark.parametrize(
+    "glob",
+    ["#tmp/*.py", "src/a #b", "a: b", "[abc]*.ts", "{a}*.ts", "!x", "&x", "%x", "@x", "|x", ">x",
+     " src/**", "src/** ", "a b"],
+)
+def test_globs_reject_yaml_unsafe_values(glob):
+    rule_file = f"---\nscope: glob\nglobs: {json.dumps([glob])}\n---\nBody"
+
+    with pytest.raises(PackError, match="'globs' must be a list"):
+        parse_rule(rule_file, SOURCE)
+
+
+@pytest.mark.parametrize("glob", ["*.ts", "**/*.tsx", "src/[!_]*.py", "docs/**/*.md"])
+def test_globs_accept_common_patterns(glob):
+    rule_file = f"---\nscope: glob\nglobs: {json.dumps([glob])}\n---\nBody"
+
+    assert parse_rule(rule_file, SOURCE).globs == (glob,)
