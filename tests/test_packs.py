@@ -77,6 +77,12 @@ CHECK_EXAMPLES = {
             "token: ghp_" + "A" * 36,
             "SLACK=xoxb-" + "1234567890-abcdef",
             "subprocess.run(cmd, shell" + "=True)",
+            # Connection URLs with a literal password (assembled so this file holds none).
+            "DATABASE_URL=postgresql+psycopg://admin:" + "s3cret-pass@db:5432/app",
+            "REDIS_URL=redis://default:" + "hunter2@cache:6379/0",
+            'client = MongoClient("mongodb+srv://app:' + 'Xy9pass@cluster0.example.net/db")',
+            "BROKER=amqp://guest:" + "guest@localhost:5672/",
+            "git clone https://bot:" + "abc123token@github.com/org/repo.git",
         ],
         [
             "api_key = os.environ['ANTHROPIC_API_KEY']",
@@ -85,6 +91,15 @@ CHECK_EXAMPLES = {
             "sk-ant-... (placeholder in docs)",
             "AKIA is the prefix of AWS access key ids",
             "the shell is untrusted",
+            # Near misses: no literal password in the URL.
+            "DATABASE_URL=postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/app",
+            'url = f"postgresql://{user}:{password}@{host}/app"',
+            "postgresql://<user>:<password>@<host>/<db>",
+            "postgresql://app:***@db/app",
+            "postgresql://app@localhost/app",
+            "API=http://localhost:8000/api/chats/",
+            "git@github.com:org/repo.git",
+            "see https://example.com/docs?user=me&page=2",
         ],
     ),
 }

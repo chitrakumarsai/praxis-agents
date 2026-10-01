@@ -24,7 +24,7 @@ Three rules carry `forbid` checks that `praxis verify` runs against the lines a 
 |---|---|
 | `classify-before-retry` | A bare `@retry` / `@retry()` decorator, which retries forever |
 | `tool-contracts` | A bare `except:`, and `except Exception: pass` (or `...`) on one line |
-| `untrusted-content` | Private keys; Anthropic, OpenAI, GitHub, AWS, and Slack tokens; `shell` set to `True` |
+| `untrusted-content` | Private keys; Anthropic, OpenAI, GitHub, AWS, and Slack tokens; passwords in connection URLs (`scheme://user:password@host`); `shell` set to `True` |
 
 The other rules are principles that need judgment, so they're reported as unchecked. The pack ships
 no `run` checks: commands are project-specific, so add your own in `.praxis/`. If a check is noisy
