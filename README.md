@@ -45,7 +45,8 @@ Every agent loop has a max-iteration cap and a deterministic stop condition.
 
 On-demand skills use the [Agent Skills](https://agentskills.io) format:
 `.praxis/skills/<name>/SKILL.md` (frontmatter `name` and `description`) plus optional
-`references/**/*.md`.
+`references/**/*.md`, `scripts/**`, and `assets/**`. Scripts and assets can be any file type up
+to 5 MB and are copied byte for byte; a script that starts with `#!` is made executable.
 
 ### Targets
 
@@ -69,7 +70,9 @@ reads both `AGENTS.md` and `copilot-instructions.md`, so some rules reach it twi
 In `AGENTS.md` and `CLAUDE.md`, praxis only edits the section between `<!-- praxis:begin -->` and
 `<!-- praxis:end -->`; anything you write outside it is kept. Skill, Cursor, and Copilot instruction
 files are owned by praxis and marked with a generated-file comment; praxis refuses to overwrite a
-file it didn't write.
+file it didn't write. Skill scripts and assets can't carry that comment, so praxis records their
+hashes in a `.praxis-manifest` in each skills directory and replaces or deletes only files that
+still match, never ones you created or edited.
 
 When you remove a rule or skill from the source, `praxis sync` deletes the files it generated for it
 (and `praxis check` reports them as stale). Only the targets you sync are cleaned: if you stop using

@@ -106,7 +106,8 @@ Rules render in file-name order, so numeric prefixes control ordering.
 - [x] Skills output: `agents` → `.agents/skills/` (Codex, Cursor, Copilot), `claude` → `.claude/skills/`
 - [x] `agent-engineering` pack: 14 rules (~130 lines in AGENTS.md) + 5 skills with references
 - [x] Packs bundled in the wheel (`src/praxis/packs/`); `praxis packs` and `praxis init <pack>`
-- Known gap (deferred): skills support only `references/**/*.md` (no `scripts/` or `assets/` yet)
+- [x] Skills support `scripts/**` and `assets/**` (any file type, byte for byte, shebang scripts
+      made executable); ownership tracked by a `.praxis-manifest` of hashes
 
 ### Phase 3 — Scoped adapters (done)
 - [x] Cursor adapter: glob rules → `.cursor/rules/praxis-<id>.mdc` (`globs`, `alwaysApply: false`);

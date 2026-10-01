@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 
 from praxis.loader import PackError, load_pack, parse_rule
-from praxis.model import ForbidCheck, Reference, Rule, RunCheck, Skill
+from praxis.model import ForbidCheck, Reference, Resource, Rule, RunCheck, Skill
 
 SOURCE = Path("rules/020-bounded-loops.md")
 
@@ -120,13 +120,18 @@ def test_load_pack_skips_hidden_files_and_directories(tmp_path):
     assert [rule.id for rule in load_pack(tmp_path).rules] == ["real"]
 
 
-def write_skill(root: Path, name: str, skill_md: str, files: dict[str, str] | None = None) -> Path:
+def write_skill(
+    root: Path, name: str, skill_md: str, files: dict[str, str | bytes] | None = None
+) -> Path:
     skill_dir = root / "skills" / name
     skill_dir.mkdir(parents=True, exist_ok=True)
     (skill_dir / "SKILL.md").write_text(skill_md, encoding="utf-8")
-    for relpath, text in (files or {}).items():
+    for relpath, content in (files or {}).items():
         (skill_dir / relpath).parent.mkdir(parents=True, exist_ok=True)
-        (skill_dir / relpath).write_text(text, encoding="utf-8")
+        if isinstance(content, bytes):
+            (skill_dir / relpath).write_bytes(content)
+        else:
+            (skill_dir / relpath).write_text(content, encoding="utf-8")
     return skill_dir
 
 
@@ -201,11 +206,50 @@ def test_skill_directory_requires_skill_md(tmp_path):
         load_pack(tmp_path)
 
 
-def test_skill_rejects_unsupported_files(tmp_path):
+@pytest.mark.parametrize("relpath", ["notes/todo.txt", "README.txt", "references/data.json"])
+def test_skill_rejects_files_outside_references_scripts_and_assets(tmp_path, relpath):
     write_rule(tmp_path, "rule.md", "Body.")
-    write_skill(tmp_path, "eval-design", SKILL_MD, {"scripts/run.sh": "echo hi"})
+    write_skill(tmp_path, "eval-design", SKILL_MD, {relpath: "x"})
 
-    with pytest.raises(PackError, match="unsupported file 'scripts/run.sh'"):
+    with pytest.raises(PackError, match=f"unsupported file '{relpath}'"):
+        load_pack(tmp_path)
+
+
+PNG = b"\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR"
+
+
+def test_skill_loads_scripts_and_assets_as_resources(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+    write_skill(
+        tmp_path,
+        "eval-design",
+        SKILL_MD,
+        {
+            "scripts/run_eval.sh": "#!/bin/sh\necho run\n",
+            "scripts/helpers.py": "def grade():\n    return 1\n",
+            "assets/template.json": '{"cases": []}\n',
+            "assets/logo.png": PNG,
+            "references/metrics.md": "# Metrics\n",
+        },
+    )
+
+    (skill,) = load_pack(tmp_path).skills
+
+    assert skill.references == (Reference("references/metrics.md", "# Metrics"),)
+    assert skill.resources == (
+        Resource("assets/logo.png", PNG),
+        Resource("assets/template.json", b'{"cases": []}\n'),
+        Resource("scripts/helpers.py", b"def grade():\n    return 1\n"),
+        Resource("scripts/run_eval.sh", b"#!/bin/sh\necho run\n", executable=True),
+    )
+
+
+def test_skill_rejects_oversized_resources(tmp_path, monkeypatch):
+    monkeypatch.setattr("praxis.loader.MAX_RESOURCE_BYTES", 10)
+    write_rule(tmp_path, "rule.md", "Body.")
+    write_skill(tmp_path, "eval-design", SKILL_MD, {"assets/big.bin": b"x" * 11})
+
+    with pytest.raises(PackError, match="'assets/big.bin' is larger than"):
         load_pack(tmp_path)
 
 
@@ -317,3 +361,20 @@ def test_rule_judge_flag_defaults_to_true_and_can_be_disabled():
 def test_rule_judge_flag_must_be_boolean():
     with pytest.raises(PackError, match="'judge' must be true or false"):
         parse_rule("---\njudge: 'no'\n---\nBody", SOURCE)
+
+
+def test_skill_rejects_resource_names_with_control_characters(tmp_path):
+    write_rule(tmp_path, "rule.md", "Body.")
+    write_skill(tmp_path, "eval-design", SKILL_MD, {"assets/evil\nname.txt": "x"})
+
+    with pytest.raises(PackError, match="control characters"):
+        load_pack(tmp_path)
+
+
+@pytest.mark.parametrize("name", ["scripts", "assets"])
+def test_skill_rejects_a_file_where_a_resource_folder_belongs(tmp_path, name):
+    write_rule(tmp_path, "rule.md", "Body.")
+    write_skill(tmp_path, "eval-design", SKILL_MD, {name: "not a folder"})
+
+    with pytest.raises(PackError, match=f"'{name}' must be a directory"):
+        load_pack(tmp_path)

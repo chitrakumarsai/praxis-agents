@@ -13,6 +13,7 @@ from typing import Any
 import yaml
 
 from praxis.globs import compile_glob
+from praxis.sync import MAX_TRACKED_BYTES
 from praxis.model import (
     BEGIN_MARKER,
     END_MARKER,
@@ -21,6 +22,7 @@ from praxis.model import (
     ForbidCheck,
     Pack,
     Reference,
+    Resource,
     Rule,
     RunCheck,
     Skill,
@@ -41,6 +43,8 @@ YAML_UNSAFE_GLOB_SUBSTRINGS = (" #", ": ")
 SKILL_FILE = "SKILL.md"
 SKILL_KEYS = frozenset({"name", "description"})
 REFERENCES_DIR = "references"
+RESOURCE_DIRS = ("scripts", "assets")  # any file type, copied byte for byte
+MAX_RESOURCE_BYTES = MAX_TRACKED_BYTES
 MAX_SKILL_NAME = 64  # limits from the Agent Skills format
 MAX_DESCRIPTION = 1024
 
@@ -225,6 +229,7 @@ def parse_skill(skill_dir: Path) -> Skill:
         description=" ".join(description.split()),
         body=_clean_body(body, "skill", source),
         references=_load_references(skill_dir),
+        resources=_load_resources(skill_dir),
     )
 
 
@@ -237,17 +242,39 @@ def _load_references(skill_dir: Path) -> tuple[Reference, ...]:
             continue
         if path.is_symlink():
             raise PackError(f"{skill_dir}: {relpath!r}: symlinks are not allowed in skills")
-        if not path.is_file():
-            continue
-        if relpath == SKILL_FILE:
+        if not path.is_file() or relpath == SKILL_FILE or relative.parts[0] in RESOURCE_DIRS:
             continue
         if relative.parts[0] != REFERENCES_DIR or path.suffix != ".md":
             raise PackError(
                 f"{skill_dir}: unsupported file {relpath!r}; a skill may contain only "
-                f"{SKILL_FILE} and {REFERENCES_DIR}/**/*.md"
+                f"{SKILL_FILE}, {REFERENCES_DIR}/**/*.md, "
+                f"and files under {' or '.join(f'{d}/' for d in RESOURCE_DIRS)}"
             )
         references.append(Reference(relpath, path.read_text(encoding="utf-8-sig").strip()))
     return tuple(sorted(references, key=lambda reference: reference.path))
+
+
+def _load_resources(skill_dir: Path) -> tuple[Resource, ...]:
+    """Scripts and assets, byte for byte (symlinks were rejected by ``_load_references``)."""
+    resources = []
+    for directory in RESOURCE_DIRS:
+        if (skill_dir / directory).is_file():
+            raise PackError(f"{skill_dir}: {directory!r} must be a directory")
+        for path in sorted((skill_dir / directory).rglob("*")):
+            relative = path.relative_to(skill_dir)
+            if any(part.startswith(".") for part in relative.parts) or not path.is_file():
+                continue
+            relpath = relative.as_posix()
+            if not relpath.isprintable():  # names are written into the manifest, one per line
+                raise PackError(f"{skill_dir}: {relpath!r} has control characters in its name")
+            if path.stat().st_size > MAX_RESOURCE_BYTES:
+                raise PackError(
+                    f"{skill_dir}: {relpath!r} is larger than {MAX_RESOURCE_BYTES:,} bytes"
+                )
+            data = path.read_bytes()
+            # A shebang marks a script as executable; file modes don't survive packaging.
+            resources.append(Resource(relpath, data, executable=data.startswith(b"#!")))
+    return tuple(sorted(resources, key=lambda resource: resource.path))
 
 
 def load_pack(root: Path) -> Pack:
