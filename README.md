@@ -19,15 +19,34 @@ Engineering guidance usually sits in docs that agents never read, or in tool-spe
 
 ## Install
 
-    pip install praxis-agents
+    uv tool install praxis-agents    # not yet published to PyPI
 
 ## Quick start
 
-    praxis init
-    praxis sync --target claude,codex
+Write rules as Markdown files in `.praxis/rules/` (rendered in file-name order):
+
+```markdown
+---
+scope: glob                # always (default) | glob
+globs: ["**/agents/**"]    # required when scope is glob
+---
+Every agent loop has a max-iteration cap and a deterministic stop condition.
+```
+
+Then generate the instruction files:
+
+    praxis sync                     # writes AGENTS.md and CLAUDE.md
+    praxis sync --target agents     # only AGENTS.md
+    praxis check                    # exit 1 if generated files are stale (for CI)
+
+praxis only edits the section between `<!-- praxis:begin -->` and `<!-- praxis:end -->`;
+anything you write outside it is kept.
 
 ## Development
 
-    python -m venv .venv && source .venv/bin/activate
-    pip install -e '.[dev]'
-    pytest
+This project uses [uv](https://docs.astral.sh/uv/):
+
+    uv sync --extra dev
+    uv run pytest
+
+See [ideas.md](ideas.md) for the roadmap and open decisions.

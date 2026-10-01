@@ -1,0 +1,102 @@
+import pytest
+
+from praxis.model import OutputFile
+from praxis.sync import BEGIN, END, SyncError, apply, managed_block, merge, plan
+
+
+def test_merge_into_missing_file_creates_block():
+    assert merge(None, "Rules.") == managed_block("Rules.") + "\n"
+
+
+def test_merge_appends_block_after_existing_content():
+    result = merge("# My project\n\nHand-written notes.\n", "Rules.")
+
+    assert result == "# My project\n\nHand-written notes.\n\n" + managed_block("Rules.") + "\n"
+
+
+def test_merge_replaces_only_the_managed_block():
+    existing = f"Before.\n\n{BEGIN}\nold\n{END}\n\nAfter.\n"
+
+    result = merge(existing, "new")
+
+    assert result == f"Before.\n\n{managed_block('new')}\n\nAfter.\n"
+
+
+def test_merge_is_idempotent():
+    once = merge("Intro.\n", "Rules.")
+
+    assert merge(once, "Rules.") == once
+
+
+@pytest.mark.parametrize(
+    "existing",
+    [
+        f"{BEGIN}\nno end\n",
+        f"no begin\n{END}\n",
+        f"{END}\n{BEGIN}\n",
+        f"{BEGIN}\n{END}\n{BEGIN}\n{END}\n",
+    ],
+)
+def test_merge_rejects_malformed_markers(existing):
+    with pytest.raises(SyncError, match="malformed praxis markers"):
+        merge(existing, "Rules.")
+
+
+def test_plan_and_apply_write_only_changed_files(tmp_path):
+    (tmp_path / "CLAUDE.md").write_text(merge(None, "@AGENTS.md"), encoding="utf-8")
+    outputs = (OutputFile("AGENTS.md", "Rules."), OutputFile("CLAUDE.md", "@AGENTS.md"))
+
+    changes = plan(tmp_path, outputs)
+    written = apply(changes)
+
+    assert [change.relpath for change in changes if change.changed] == ["AGENTS.md"]
+    assert written == (tmp_path / "AGENTS.md",)
+    assert all(not change.changed for change in plan(tmp_path, outputs))
+
+
+def test_apply_creates_parent_directories(tmp_path):
+    apply(plan(tmp_path, (OutputFile(".github/copilot-instructions.md", "Rules."),)))
+
+    assert (tmp_path / ".github" / "copilot-instructions.md").is_file()
+
+
+def test_plan_reports_path_of_malformed_file(tmp_path):
+    (tmp_path / "AGENTS.md").write_text(f"{BEGIN}\n", encoding="utf-8")
+
+    with pytest.raises(SyncError, match="AGENTS.md"):
+        plan(tmp_path, (OutputFile("AGENTS.md", "Rules."),))
+
+
+def test_plan_preserves_crlf_line_endings(tmp_path):
+    path = tmp_path / "AGENTS.md"
+    path.write_bytes(b"# Title\r\n\r\nNotes.\r\n")
+    outputs = (OutputFile("AGENTS.md", "Rule one.\n\nRule two."),)
+
+    apply(plan(tmp_path, outputs))
+
+    raw = path.read_bytes()
+    assert raw.startswith(b"# Title\r\n\r\nNotes.\r\n\r\n")
+    assert b"\n" not in raw.replace(b"\r\n", b"")
+    assert all(not change.changed for change in plan(tmp_path, outputs))
+
+
+def test_apply_preserves_file_mode_and_leaves_no_temp_files(tmp_path):
+    path = tmp_path / "AGENTS.md"
+    path.write_text("Notes.\n", encoding="utf-8")
+    path.chmod(0o640)
+
+    apply(plan(tmp_path, (OutputFile("AGENTS.md", "Rules."),)))
+
+    assert path.stat().st_mode & 0o777 == 0o640
+    assert sorted(p.name for p in tmp_path.iterdir()) == ["AGENTS.md"]
+
+
+def test_apply_writes_through_symlinks(tmp_path):
+    real = tmp_path / "shared.md"
+    real.write_text("Notes.\n", encoding="utf-8")
+    (tmp_path / "AGENTS.md").symlink_to(real)
+
+    apply(plan(tmp_path, (OutputFile("AGENTS.md", "Rules."),)))
+
+    assert (tmp_path / "AGENTS.md").is_symlink()
+    assert "Rules." in real.read_text(encoding="utf-8")
