@@ -104,6 +104,7 @@ Rules render in file-name order, so numeric prefixes control ordering.
 ### Phase 2 — Skills and first pack
 - [ ] Model + loader for skills (`SKILL.md` + `references/`), validated against the Agent Skills spec
 - [ ] Skills output for each target that supports them
+- [x] Draft `packs/agent-engineering/`: 14 rules (~130 lines in AGENTS.md) + 5 skills with references — **awaiting review**
 - [ ] `praxis init --pack agent-engineering`: bundled starter pack distilled from the source material
 
 ### Phase 3 — Scoped adapters
