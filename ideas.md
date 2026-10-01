@@ -134,8 +134,12 @@ Rules render in file-name order, so numeric prefixes control ordering.
 - [x] Judge precision: `judge: false` frontmatter skips process rules (4 in the bundled pack); the
       rubric fails only what a change introduces. Live check: a harmless change got 0 failures from
       both providers; the flawed demo kept its real violations (6 failures with OpenAI, 7 with Claude)
-- [ ] Calibrate the judge: reviewed pass/fail cases per rule, measure false accepts and rejects,
-      then decide whether judge failures may gate the exit code
+- [x] Calibrate the judge (`evals/judge/`): 16 human-reviewed cases × 7 judged rules, 2 reps.
+      Claude: 96% of violations caught, 0% false fails. OpenAI: 98% caught, 11% false fails.
+      Labels were revised once after the first run (17 pairs, marked in `cases.yaml`)
+- [ ] Decide whether judge failures may gate the exit code (Claude's numbers support an opt-in
+      `--judge-strict`; OpenAI's 11% false-fail rate argues for keeping it advisory there)
+- [ ] Grow the calibration set with real diffs from projects that use praxis
 - Known limits: project root must be the git top level; `run` checks trust the rule files
 
 ## Open decisions

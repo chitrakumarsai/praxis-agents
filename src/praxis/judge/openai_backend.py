@@ -54,13 +54,15 @@ class OpenAIBackend:
             # Same key for every request in a run, so OpenAI's automatic prefix cache is reused.
             prompt_cache_key=request.cache_key,
         )
+        meta = {"model": getattr(response, "model", "") or "", "usage": _usage(response)}
         if _refused(response):
-            return Completion("", "refused")
+            return Completion("", "refused", **meta)
         if getattr(response, "status", None) == "incomplete":
             details = getattr(response, "incomplete_details", None)
             reason = getattr(details, "reason", None)
-            return Completion("", "refused" if reason == "content_filter" else "truncated")
-        return Completion(getattr(response, "output_text", "") or "")
+            ending = "refused" if reason == "content_filter" else "truncated"
+            return Completion("", ending, **meta)
+        return Completion(getattr(response, "output_text", "") or "", **meta)
 
     @staticmethod
     def _input(request: JudgeRequest) -> list[dict[str, Any]]:
@@ -73,6 +75,20 @@ class OpenAIBackend:
                 ],
             }
         ]
+
+
+def _usage(response: Any) -> dict[str, int]:
+    """Token counts in the same shape as the Anthropic backend (cached input reported apart)."""
+    usage = getattr(response, "usage", None)
+    if not usage:
+        return {}
+    cached = int(getattr(getattr(usage, "input_tokens_details", None), "cached_tokens", 0) or 0)
+    return {
+        "input_tokens": int(getattr(usage, "input_tokens", 0) or 0) - cached,
+        "output_tokens": int(getattr(usage, "output_tokens", 0) or 0),
+        "cache_read_input_tokens": cached,
+        "cache_creation_input_tokens": 0,
+    }
 
 
 def _refused(response: Any) -> bool:

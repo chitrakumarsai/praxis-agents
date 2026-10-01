@@ -116,3 +116,16 @@ def test_missing_sdk_explains_how_to_install(monkeypatch):
 def test_make_backend_rejects_unknown_providers():
     with pytest.raises(JudgeError, match="unknown judge provider 'gemini'"):
         make_backend("gemini")
+
+
+def test_usage_reports_cached_input_separately():
+    reply = response()
+    reply.model = "gpt-6.1-sol"
+    reply.usage = SimpleNamespace(
+        input_tokens=1000, output_tokens=50, input_tokens_details=SimpleNamespace(cached_tokens=800)
+    )
+
+    (verdict,) = Judge(OpenAIBackend(client=FakeOpenAI(reply))).grade((STATE,), DIFF, SCOPE)
+
+    assert verdict.model == "gpt-6.1-sol"
+    assert verdict.usage["input_tokens"] == 200 and verdict.usage["cache_read_input_tokens"] == 800

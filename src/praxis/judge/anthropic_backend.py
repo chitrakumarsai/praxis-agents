@@ -51,14 +51,15 @@ class AnthropicBackend:
             betas=[FALLBACK_BETA],
             fallbacks="default",
         )
+        meta = {"model": getattr(response, "model", "") or "", "usage": _usage(response)}
         stop_reason = getattr(response, "stop_reason", None)
         if stop_reason == "refusal":
-            return Completion("", "refused")
+            return Completion("", "refused", **meta)
         if stop_reason == "max_tokens":
-            return Completion("", "truncated")
+            return Completion("", "truncated", **meta)
         blocks = getattr(response, "content", None) or []
         texts = (getattr(b, "text", "") for b in blocks if getattr(b, "type", "") == "text")
-        return Completion(next(texts, ""))
+        return Completion(next(texts, ""), **meta)
 
     @staticmethod
     def _messages(request: JudgeRequest) -> list[dict[str, Any]]:
@@ -76,6 +77,17 @@ class AnthropicBackend:
                 ],
             }
         ]
+
+
+def _usage(response: Any) -> dict[str, int]:
+    usage = getattr(response, "usage", None)
+    fields = (
+        "input_tokens",
+        "output_tokens",
+        "cache_read_input_tokens",
+        "cache_creation_input_tokens",
+    )
+    return {name: int(getattr(usage, name, 0) or 0) for name in fields} if usage else {}
 
 
 def _call(method: Any, **kwargs: Any) -> Any:

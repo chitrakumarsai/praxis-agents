@@ -222,3 +222,23 @@ def test_rubric_limits_failures_to_what_the_change_introduces():
     system = client.calls[0]["system"]
     assert "lines this change adds or modifies" in system
     assert "practices outside the changed code" in system
+
+
+def test_verdicts_carry_served_model_usage_and_latency():
+    response = reply(PASS)
+    response.model = "claude-opus-5-5"
+    response.usage = SimpleNamespace(
+        input_tokens=100, output_tokens=20, cache_read_input_tokens=900, cache_creation_input_tokens=0
+    )
+    client = FakeClient({"state": response})
+
+    (verdict,) = Judge(AnthropicBackend(client=client)).grade((STATE,), DIFF, SCOPE)
+
+    assert verdict.model == "claude-opus-5-5"
+    assert verdict.usage == {
+        "input_tokens": 100,
+        "output_tokens": 20,
+        "cache_read_input_tokens": 900,
+        "cache_creation_input_tokens": 0,
+    }
+    assert verdict.latency_s >= 0

@@ -10,10 +10,11 @@ from __future__ import annotations
 import json
 import re
 import secrets
+import time
 import unicodedata
 from collections.abc import Mapping, Sequence
 from concurrent.futures import ThreadPoolExecutor
-from dataclasses import dataclass
+from dataclasses import dataclass, field, replace
 from typing import Literal, Protocol
 
 from praxis.model import Rule
@@ -79,6 +80,10 @@ class Verdict:
     status: VerdictStatus
     explanation: str
     evidence: tuple[str, ...] = ()
+    # Run metadata for cost and calibration reports; not part of the verdict itself.
+    model: str = field(default="", compare=False)
+    usage: Mapping[str, int] = field(default_factory=dict, compare=False)
+    latency_s: float = field(default=0.0, compare=False)
 
 
 @dataclass(frozen=True)
@@ -95,6 +100,8 @@ class JudgeRequest:
 class Completion:
     text: str
     ending: Literal["done", "refused", "truncated"] = "done"
+    model: str = ""  # the model that served the request, from the response
+    usage: Mapping[str, int] = field(default_factory=dict)  # input/output/cache token counts
 
 
 class Backend(Protocol):
@@ -165,7 +172,15 @@ class Judge:
             )
 
     def _grade_one(self, rule_id: str, request: JudgeRequest, diff: str) -> Verdict:
-        return _parse_verdict(rule_id, self._backend.complete(request), diff)
+        started = time.monotonic()
+        completion = self._backend.complete(request)
+        verdict = _parse_verdict(rule_id, completion, diff)
+        return replace(
+            verdict,
+            model=completion.model,
+            usage=dict(completion.usage),
+            latency_s=round(time.monotonic() - started, 3),
+        )
 
     def _grade_or_unknown(self, rule_id: str, request: JudgeRequest, diff: str) -> Verdict:
         try:

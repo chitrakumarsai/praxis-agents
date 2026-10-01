@@ -137,8 +137,10 @@ in, and export it into the shell first: `set -a; . ./.env; set +a`.
   (tracing, metrics, planning) count as not applicable rather than failures of a small change.
 - Verdicts are `pass`, `fail` (with `path:line` evidence), `not_applicable`, or `unknown`.
   Refusals, cut-off answers, and malformed output count as `unknown`, never `pass`.
-- Judge results are advisory and don't change the exit code: the judge hasn't been calibrated
-  against your project's reviewed cases. Diffs over 200k tokens are refused rather than truncated.
+- Judge results are advisory and don't change the exit code. On the calibration set in
+  `evals/judge/` (16 reviewed cases), Claude caught 96% of violations with no false fails and
+  OpenAI caught 98% with 11% false fails; see `evals/judge/RESULTS.md`. Diffs over 200k tokens are
+  refused rather than truncated.
 - The diff is sent to the provider's API; the praxis source and generated files are left out.
 
 ## Development

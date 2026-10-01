@@ -11,3 +11,9 @@ dist/
 .env
 .env.*
 !.env.example
+
+# Judge calibration: keep labels and results summaries, not bulky per-run output.
+evals/judge/runs/*/*/traces/
+evals/judge/runs/*/report.html
+evals/judge/runs/*/state.json
+evals/judge/runs/*/trajectory/
