@@ -1,9 +1,11 @@
+import hashlib
+
 import pytest
 
 from praxis.adapters import DEFAULT_TARGETS, TARGETS, resolve_targets
 from praxis.adapters import agents_md, claude, copilot, cursor
 from praxis.loader import split_frontmatter
-from praxis.model import NOTICE, OutputFile, Pack, Reference, Rule, Skill
+from praxis.model import NOTICE, OutputFile, Pack, Reference, Resource, Rule, Skill
 
 PACK = Pack(
     rules=(
@@ -139,3 +141,35 @@ def test_copilot_skips_repo_instructions_without_always_rules():
     assert [output.path for output in copilot.render(only_scoped)] == [
         ".github/instructions/praxis-loops.instructions.md"
     ]
+
+
+RESOURCE_SKILL = Skill(
+    name="eval-design",
+    description="Design evals.",
+    body="# Evals",
+    resources=(
+        Resource("assets/logo.png", b"\x89PNG\r\n"),
+        Resource("scripts/run.sh", b"#!/bin/sh\necho run\n", executable=True),
+    ),
+)
+
+
+def test_skill_resources_are_written_as_bytes_with_a_manifest():
+    outputs = {o.path: o for o in agents_md.render(Pack(skills=(RESOURCE_SKILL,)))}
+
+    script = outputs[".agents/skills/eval-design/scripts/run.sh"]
+    logo = outputs[".agents/skills/eval-design/assets/logo.png"]
+    assert script.content == b"#!/bin/sh\necho run\n" and script.executable and not script.managed
+    assert logo.content == b"\x89PNG\r\n" and not logo.executable
+
+    manifest = outputs[".agents/skills/.praxis-manifest"].content
+    assert manifest.splitlines()[0] == NOTICE
+    script_sha = hashlib.sha256(b"#!/bin/sh\necho run\n").hexdigest()
+    assert f"{script_sha}  eval-design/scripts/run.sh" in manifest
+    assert "eval-design/assets/logo.png" in manifest
+
+
+def test_no_manifest_without_resources():
+    paths = [o.path for o in agents_md.render(Pack(skills=(SKILL,)))]
+
+    assert not any(path.endswith(".praxis-manifest") for path in paths)

@@ -354,3 +354,29 @@ def test_judge_strict_requires_judge(verify_repo):
         run(verify_repo, "verify", "--judge-strict")
 
     assert exc.value.code == 2
+
+
+def test_skill_scripts_and_assets_sync_check_and_clean_up(project, capsys):
+    skill = project / ".praxis" / "skills" / "eval-design"
+    (skill / "scripts").mkdir(parents=True)
+    (skill / "assets").mkdir()
+    (skill / "SKILL.md").write_text("---\nname: eval-design\ndescription: Evals.\n---\nRun it.\n")
+    (skill / "scripts" / "run.sh").write_text("#!/bin/sh\necho run\n")
+    (skill / "assets" / "logo.png").write_bytes(b"\x89PNG\r\n\x00")
+
+    assert run(project, "sync") == 0
+    for base in (".agents/skills", ".claude/skills"):
+        script = project / base / "eval-design" / "scripts" / "run.sh"
+        assert script.stat().st_mode & 0o111
+        assert (project / base / "eval-design" / "assets" / "logo.png").read_bytes() == b"\x89PNG\r\n\x00"
+    assert run(project, "check") == 0
+
+    (skill / "scripts" / "run.sh").unlink()
+    capsys.readouterr()
+    assert run(project, "check") == 1
+    assert "stale: .agents/skills/eval-design/scripts/run.sh" in capsys.readouterr().out
+
+    assert run(project, "sync") == 0
+    assert not (project / ".agents/skills/eval-design/scripts").exists()
+    assert (project / ".agents/skills/eval-design/assets/logo.png").exists()
+    assert run(project, "check") == 0

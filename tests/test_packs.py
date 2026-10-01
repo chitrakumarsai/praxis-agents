@@ -16,7 +16,7 @@ PACK_NAMES = available_packs()
 
 # Always-on rules are loaded on every request; keep them short enough to be followed.
 MAX_RULE_LINES = 160
-REFERENCE_LINK = re.compile(r"`(references/[^`]+)`")
+REFERENCE_LINK = re.compile(r"`((?:references|scripts|assets)/[^`]+)`")
 
 
 def test_agent_engineering_pack_is_bundled():
@@ -38,7 +38,7 @@ def test_skill_reference_links_resolve(name):
         pack = load_pack(source)
 
     for skill in pack.skills:
-        shipped = {reference.path for reference in skill.references}
+        shipped = {ref.path for ref in skill.references} | {res.path for res in skill.resources}
         assert set(REFERENCE_LINK.findall(skill.body)) <= shipped, skill.name
 
 

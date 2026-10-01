@@ -53,13 +53,23 @@ class Reference:
 
 
 @dataclass(frozen=True)
+class Resource:
+    """A script or asset shipped with a skill, copied byte for byte (``scripts/``, ``assets/``)."""
+
+    path: str  # POSIX path relative to the skill directory, e.g. "scripts/run.sh"
+    data: bytes
+    executable: bool = False  # set for scripts that start with a "#!" line
+
+
+@dataclass(frozen=True)
 class Skill:
-    """An on-demand capability in the Agent Skills format (``SKILL.md`` + references)."""
+    """An on-demand capability in the Agent Skills format (``SKILL.md`` + supporting files)."""
 
     name: str
     description: str
     body: str
     references: tuple[Reference, ...] = ()
+    resources: tuple[Resource, ...] = ()
 
 
 @dataclass(frozen=True)
@@ -75,9 +85,11 @@ class OutputFile:
     """One generated file.
 
     ``managed`` files get ``content`` inside praxis markers, keeping the rest of the file.
-    Otherwise praxis owns the whole file, and ``content`` must include :data:`NOTICE`.
+    Otherwise praxis owns the whole file: text ``content`` must include :data:`NOTICE`, and
+    ``bytes`` content (scripts, assets) is owned through a hash manifest instead.
     """
 
     path: str  # POSIX path relative to the project root
-    content: str
+    content: str | bytes
     managed: bool = True
+    executable: bool = False
