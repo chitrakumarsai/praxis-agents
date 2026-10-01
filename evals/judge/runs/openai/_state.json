@@ -1,0 +1,30 @@
+{
+  "metrics": [
+    {
+      "id": "fail_agree",
+      "label": "fail vs not",
+      "kind": "binary"
+    },
+    {
+      "id": "agree",
+      "label": "exact verdict",
+      "kind": "binary"
+    }
+  ],
+  "perf_fields": [
+    {
+      "id": "latency_s",
+      "label": "latency",
+      "unit": "s"
+    },
+    {
+      "id": "in_tokens",
+      "label": "in tok"
+    },
+    {
+      "id": "out_tokens",
+      "label": "out tok"
+    }
+  ],
+  "harness_sha": "faf613c9297771afd7886cc9af9137e2fdbb48b5099f5abf1a8a9f33beffbe32"
+}
