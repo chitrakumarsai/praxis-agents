@@ -12,9 +12,9 @@ from typing import Any
 
 import yaml
 
-from praxis.globs import compile_glob
-from praxis.sync import MAX_TRACKED_BYTES
-from praxis.model import (
+from praxis_agents.globs import compile_glob
+from praxis_agents.sync import MAX_TRACKED_BYTES
+from praxis_agents.model import (
     BEGIN_MARKER,
     END_MARKER,
     SCOPES,

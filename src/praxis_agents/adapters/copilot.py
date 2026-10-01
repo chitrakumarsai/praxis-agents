@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import json
 
-from praxis.adapters.agents_md import always_section
-from praxis.model import NOTICE, OutputFile, Pack
+from praxis_agents.adapters.agents_md import always_section
+from praxis_agents.model import NOTICE, OutputFile, Pack
 
 REPO_PATH = ".github/copilot-instructions.md"
 INSTRUCTIONS_DIR = ".github/instructions"

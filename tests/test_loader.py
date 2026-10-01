@@ -3,8 +3,8 @@ from pathlib import Path
 
 import pytest
 
-from praxis.loader import PackError, load_pack, parse_rule
-from praxis.model import ForbidCheck, Reference, Resource, Rule, RunCheck, Skill
+from praxis_agents.loader import PackError, load_pack, parse_rule
+from praxis_agents.model import ForbidCheck, Reference, Resource, Rule, RunCheck, Skill
 
 SOURCE = Path("rules/020-bounded-loops.md")
 
@@ -245,7 +245,7 @@ def test_skill_loads_scripts_and_assets_as_resources(tmp_path):
 
 
 def test_skill_rejects_oversized_resources(tmp_path, monkeypatch):
-    monkeypatch.setattr("praxis.loader.MAX_RESOURCE_BYTES", 10)
+    monkeypatch.setattr("praxis_agents.loader.MAX_RESOURCE_BYTES", 10)
     write_rule(tmp_path, "rule.md", "Body.")
     write_skill(tmp_path, "eval-design", SKILL_MD, {"assets/big.bin": b"x" * 11})
 

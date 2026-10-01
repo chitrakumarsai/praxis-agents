@@ -9,10 +9,10 @@ from pathlib import Path
 
 import yaml
 
-from praxis.bundled import pack_source
-from praxis.judge import STATUSES
-from praxis.loader import load_pack
-from praxis.model import Rule
+from praxis_agents.bundled import pack_source
+from praxis_agents.judge import STATUSES
+from praxis_agents.loader import load_pack
+from praxis_agents.model import Rule
 
 EVAL_DIR = Path(__file__).resolve().parent
 CASES_DIR = EVAL_DIR / "cases"

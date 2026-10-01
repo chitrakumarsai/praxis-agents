@@ -19,7 +19,13 @@ Engineering guidance usually sits in docs that agents never read, or in tool-spe
 
 ## Install
 
-    uv tool install praxis-agents    # not yet published to PyPI
+Requires Python 3.10+. Install the `praxis` command with [uv](https://docs.astral.sh/uv/) or pip:
+
+    uv tool install praxis-agents                  # or: pip install praxis-agents
+    uv tool install 'praxis-agents[judge]'         # with the Claude judge for `praxis verify --judge`
+    uv tool install 'praxis-agents[judge-openai]'  # with the OpenAI judge
+
+The command is `praxis`; the Python module is `praxis_agents`.
 
 ## Quick start
 

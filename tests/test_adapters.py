@@ -2,10 +2,10 @@ import hashlib
 
 import pytest
 
-from praxis.adapters import DEFAULT_TARGETS, TARGETS, resolve_targets
-from praxis.adapters import agents_md, claude, copilot, cursor
-from praxis.loader import split_frontmatter
-from praxis.model import NOTICE, OutputFile, Pack, Reference, Resource, Rule, Skill
+from praxis_agents.adapters import DEFAULT_TARGETS, TARGETS, resolve_targets
+from praxis_agents.adapters import agents_md, claude, copilot, cursor
+from praxis_agents.loader import split_frontmatter
+from praxis_agents.model import NOTICE, OutputFile, Pack, Reference, Resource, Rule, Skill
 
 PACK = Pack(
     rules=(

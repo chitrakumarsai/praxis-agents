@@ -2,8 +2,8 @@ import sys
 import time
 from pathlib import Path
 
-from praxis.model import ForbidCheck, Pack, Rule, RunCheck
-from praxis.verify import EXIT_TIMEOUT, RuleResult, exclude_paths, run_command, verify
+from praxis_agents.model import ForbidCheck, Pack, Rule, RunCheck
+from praxis_agents.verify import EXIT_TIMEOUT, RuleResult, exclude_paths, run_command, verify
 
 LOOPS = Rule(
     id="loops",
@@ -125,7 +125,7 @@ def test_run_command_reports_os_errors_instead_of_raising(tmp_path):
 
 
 def test_forbid_only_searches_the_start_of_very_long_lines(monkeypatch):
-    monkeypatch.setattr("praxis.verify.MAX_LINE_CHARS", 10)
+    monkeypatch.setattr("praxis_agents.verify.MAX_LINE_CHARS", 10)
     rule = Rule(id="r", body="x", checks=(ForbidCheck(pattern="needle"),))
 
     (result,) = verify(Pack(rules=(rule,)), {"a.min.js": ((1, "x" * 20 + "needle"),)}, Path("."))

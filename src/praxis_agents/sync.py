@@ -15,9 +15,9 @@ from collections.abc import Iterable, Mapping
 from dataclasses import dataclass
 from pathlib import Path
 
-from praxis.model import BEGIN_MARKER as BEGIN
-from praxis.model import END_MARKER as END
-from praxis.model import NOTICE, OutputFile
+from praxis_agents.model import BEGIN_MARKER as BEGIN
+from praxis_agents.model import END_MARKER as END
+from praxis_agents.model import NOTICE, OutputFile
 
 DEFAULT_FILE_MODE = 0o644
 # A file counts as praxis-generated only if NOTICE is a whole line near its top.

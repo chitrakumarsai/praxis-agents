@@ -17,7 +17,7 @@ from concurrent.futures import ThreadPoolExecutor
 from dataclasses import dataclass, field, replace
 from typing import Literal, Protocol
 
-from praxis.model import Rule
+from praxis_agents.model import Rule
 
 PROVIDERS = ("anthropic", "openai")
 DEFAULT_PROVIDER = "anthropic"
@@ -118,11 +118,11 @@ class Backend(Protocol):
 def make_backend(provider: str, model: str | None = None, effort: str = DEFAULT_EFFORT) -> Backend:
     """Build the backend for ``provider`` with its SDK's default client and credentials."""
     if provider == "anthropic":
-        from praxis.judge.anthropic_backend import AnthropicBackend
+        from praxis_agents.judge.anthropic_backend import AnthropicBackend
 
         return AnthropicBackend(model=model, effort=effort)
     if provider == "openai":
-        from praxis.judge.openai_backend import OpenAIBackend
+        from praxis_agents.judge.openai_backend import OpenAIBackend
 
         return OpenAIBackend(model=model, effort=effort)
     raise JudgeError(f"unknown judge provider {provider!r}; expected one of {', '.join(PROVIDERS)}")

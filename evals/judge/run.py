@@ -20,13 +20,13 @@ from pathlib import Path
 
 from cases import EVAL_DIR, Case, judged_rules, load_cases
 
-from praxis.judge import PROVIDERS, Judge, JudgeError, Verdict, make_backend
+from praxis_agents.judge import PROVIDERS, Judge, JudgeError, Verdict, make_backend
 
 REPO = EVAL_DIR.parent.parent
 RUNS_DIR = EVAL_DIR / "runs"
 VARIANT_NAME = re.compile(r"^(baseline|v[1-9][0-9]*)$")
 HARNESS_GLOBS = ("evals/judge/*.py", "evals/judge/cases.yaml", "evals/judge/cases/**/*",
-                 "src/praxis/judge/*.py")
+                 "src/praxis_agents/judge/*.py")
 METRICS = [
     {"id": "fail_agree", "label": "fail vs not", "kind": "binary"},
     {"id": "agree", "label": "exact verdict", "kind": "binary"},

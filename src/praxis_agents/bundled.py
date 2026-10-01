@@ -18,7 +18,7 @@ PACKS_DIR = "packs"
 
 
 def _packs_root() -> Traversable:
-    return files("praxis").joinpath(PACKS_DIR)
+    return files("praxis_agents").joinpath(PACKS_DIR)
 
 
 def available_packs() -> tuple[str, ...]:

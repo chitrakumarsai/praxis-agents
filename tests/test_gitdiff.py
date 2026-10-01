@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from conftest import git
 
-from praxis.gitdiff import GitError, added_lines, parse_diff, unified_diff
+from praxis_agents.gitdiff import GitError, added_lines, parse_diff, unified_diff
 
 DIFF = """\
 diff --git a/src/loop.py b/src/loop.py
@@ -127,7 +127,7 @@ def test_added_lines_are_relative_to_a_project_root_below_the_git_top_level(repo
 
 
 def test_added_lines_skips_large_untracked_files(repo, monkeypatch):
-    monkeypatch.setattr("praxis.gitdiff.MAX_UNTRACKED_BYTES", 10)
+    monkeypatch.setattr("praxis_agents.gitdiff.MAX_UNTRACKED_BYTES", 10)
     (repo / "small.txt").write_text("ok\n", encoding="utf-8")
     (repo / "big.txt").write_text("x" * 100 + "\n", encoding="utf-8")
 

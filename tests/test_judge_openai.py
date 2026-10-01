@@ -6,9 +6,9 @@ import httpx2
 import openai
 import pytest
 
-from praxis.judge import Judge, JudgeError, make_backend
-from praxis.judge.openai_backend import DEFAULT_MODEL, OpenAIBackend
-from praxis.model import Rule
+from praxis_agents.judge import Judge, JudgeError, make_backend
+from praxis_agents.judge.openai_backend import DEFAULT_MODEL, OpenAIBackend
+from praxis_agents.model import Rule
 
 STATE = Rule(id="state", body="Keep state explicit.")
 HANDOFF = Rule(id="human-handoff", body="Bind approval to the specific action.")
@@ -90,7 +90,7 @@ def test_refusals_and_incomplete_answers_become_unknown(reply, explanation):
 
 
 def test_large_inputs_are_counted_and_refused_over_the_limit(monkeypatch):
-    monkeypatch.setattr("praxis.judge.MAX_INPUT_TOKENS", 10)
+    monkeypatch.setattr("praxis_agents.judge.MAX_INPUT_TOKENS", 10)
     client = FakeOpenAI(input_tokens=10_000)
 
     with pytest.raises(JudgeError, match="over the judge's limit"):

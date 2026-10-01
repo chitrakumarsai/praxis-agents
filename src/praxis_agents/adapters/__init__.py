@@ -5,9 +5,9 @@ from __future__ import annotations
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
-from praxis.adapters import agents_md, claude, copilot, cursor
-from praxis.adapters.skills import SHARED_SKILLS_DIR
-from praxis.model import OutputFile, Pack
+from praxis_agents.adapters import agents_md, claude, copilot, cursor
+from praxis_agents.adapters.skills import SHARED_SKILLS_DIR
+from praxis_agents.model import OutputFile, Pack
 
 
 @dataclass(frozen=True)

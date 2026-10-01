@@ -6,9 +6,9 @@ import anthropic
 import httpx2
 import pytest
 
-from praxis.judge import Judge, JudgeError, Verdict
-from praxis.judge.anthropic_backend import DEFAULT_MODEL, FALLBACK_BETA, AnthropicBackend
-from praxis.model import Rule
+from praxis_agents.judge import Judge, JudgeError, Verdict
+from praxis_agents.judge.anthropic_backend import DEFAULT_MODEL, FALLBACK_BETA, AnthropicBackend
+from praxis_agents.model import Rule
 
 HANDOFF = Rule(id="human-handoff", body="Bind approval to the specific action.")
 STATE = Rule(id="state", body="Keep state explicit.")
@@ -106,7 +106,7 @@ def test_unusable_answers_become_unknown_not_pass(response, explanation):
 
 
 def test_oversized_diff_is_refused_without_grading(monkeypatch):
-    monkeypatch.setattr("praxis.judge.MAX_INPUT_TOKENS", 10)
+    monkeypatch.setattr("praxis_agents.judge.MAX_INPUT_TOKENS", 10)
     client = FakeClient({"state": reply(PASS)}, input_tokens=10_000_000)
 
     with pytest.raises(JudgeError, match="over the judge's limit"):

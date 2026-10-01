@@ -9,14 +9,14 @@ from collections.abc import Sequence
 from dataclasses import dataclass
 from pathlib import Path
 
-from praxis import __version__
-from praxis.adapters import DEFAULT_TARGETS, TARGETS, resolve_targets
-from praxis.bundled import available_packs, install_pack
-from praxis.gitdiff import added_lines, unified_diff
-from praxis.judge import DEFAULT_PROVIDER, PROVIDERS, Judge, Verdict, clean_text, make_backend
-from praxis.loader import load_pack
-from praxis.sync import FileChange, apply, plan, plan_stale
-from praxis.verify import RuleResult, exclude_paths, paths_in_scope, verify
+from praxis_agents import __version__
+from praxis_agents.adapters import DEFAULT_TARGETS, TARGETS, resolve_targets
+from praxis_agents.bundled import available_packs, install_pack
+from praxis_agents.gitdiff import added_lines, unified_diff
+from praxis_agents.judge import DEFAULT_PROVIDER, PROVIDERS, Judge, Verdict, clean_text, make_backend
+from praxis_agents.loader import load_pack
+from praxis_agents.sync import FileChange, apply, plan, plan_stale
+from praxis_agents.verify import RuleResult, exclude_paths, paths_in_scope, verify
 
 DEFAULT_SOURCE = Path(".praxis")
 DEFAULT_BASE = "main"
