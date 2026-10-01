@@ -19,7 +19,13 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8"]
+dev = [
+    "anthropic>=1.11.0",
+    "pytest>=8",
+]
+judge = [
+    "anthropic>=1.11.0",
+]
 
 [project.scripts]
 praxis = "praxis.cli:main"

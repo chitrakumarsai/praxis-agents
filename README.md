@@ -108,11 +108,33 @@ counted as unchecked. The praxis source and generated files are never checked.
 - `forbid` patterns are Python regexes from your rule files; only the first 10,000 characters of each
   line are searched, and untracked files over 1 MB are skipped.
 
+### LLM judge (optional)
+
+Most rules are principles a regex can't check. `--judge` has Claude grade the change against each
+rule without checks that touches a changed file:
+
+    uv tool install 'praxis-agents[judge]'     # or: uv sync --extra judge
+    praxis verify --judge
+    praxis verify --judge --judge-model claude-sonnet-5-5
+
+    JUDGE FAIL human-handoff
+      Approval is read from the model's own output instead of a recorded approval.
+      src/agents/approve.py:14: if plan.approved:
+    judge (claude-opus-5-5, advisory): 1 failed, 2 passed, 0 unknown, 8 not applicable
+
+- Uses your Anthropic credentials (`ANTHROPIC_API_KEY` or an `ant auth login` profile) and costs
+  one request per graded rule; the diff is cached and shared across those requests.
+- Verdicts are `pass`, `fail` (with `path:line` evidence), `not_applicable`, or `unknown`.
+  Refusals, cut-off answers, and malformed output count as `unknown`, never `pass`.
+- Judge results are advisory and don't change the exit code: the judge hasn't been calibrated
+  against your project's reviewed cases. Diffs over 200k tokens are refused rather than truncated.
+- The diff is sent to the API; the praxis source and generated files are left out of it.
+
 ## Development
 
 This project uses [uv](https://docs.astral.sh/uv/):
 
-    uv sync --extra dev
+    uv sync --extra dev        # includes the judge's SDK so its tests run
     uv run pytest
 
 See [ideas.md](ideas.md) for the roadmap and open decisions.

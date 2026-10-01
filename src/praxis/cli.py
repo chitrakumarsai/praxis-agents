@@ -11,10 +11,11 @@ from pathlib import Path
 from praxis import __version__
 from praxis.adapters import DEFAULT_TARGETS, TARGETS, resolve_targets
 from praxis.bundled import available_packs, install_pack
-from praxis.gitdiff import added_lines
+from praxis.gitdiff import added_lines, unified_diff
+from praxis.judge import DEFAULT_MODEL, Judge, Verdict, clean_text
 from praxis.loader import load_pack
 from praxis.sync import FileChange, apply, plan, plan_stale
-from praxis.verify import RuleResult, exclude_paths, verify
+from praxis.verify import RuleResult, exclude_paths, paths_in_scope, verify
 
 DEFAULT_SOURCE = Path(".praxis")
 DEFAULT_BASE = "main"
@@ -71,6 +72,14 @@ def build_parser() -> argparse.ArgumentParser:
     verify_command.add_argument(
         "--base", default=DEFAULT_BASE, help=f"git ref to compare against (default: {DEFAULT_BASE})"
     )
+    verify_command.add_argument(
+        "--judge",
+        action="store_true",
+        help="also have Claude grade rules without checks (advisory; needs praxis-agents[judge])",
+    )
+    verify_command.add_argument(
+        "--judge-model", help=f"judge model, with --judge (default: {DEFAULT_MODEL})"
+    )
     return parser
 
 
@@ -93,6 +102,8 @@ def plan_changes(root: Path, source: Path, target_list: str) -> tuple[FileChange
 def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
+    if args.command == "verify" and args.judge_model and not args.judge:
+        parser.error("--judge-model requires --judge")
     if args.command is None:
         parser.print_help()
         return EXIT_OK
@@ -109,7 +120,8 @@ def run_command(args: argparse.Namespace) -> int:
         print("\n".join(available_packs()))
         return EXIT_OK
     if args.command == "verify":
-        return run_verify(args.root, args.source, args.base)
+        judge_model = (args.judge_model or DEFAULT_MODEL) if args.judge else None
+        return run_verify(args.root, args.source, args.base, judge_model)
     if args.command == "init":
         install_pack(args.pack, args.root / args.source)
         print(f"installed pack '{args.pack}' into {args.source}; run `praxis sync` next")
@@ -121,15 +133,41 @@ def run_command(args: argparse.Namespace) -> int:
     return report_sync(changes, apply(changes))
 
 
-def run_verify(root: Path, source: Path, base: str) -> int:
-    pack = load_pack(root / source)
-    # Rule files and generated instruction files quote rule text; never check them.
+def _praxis_paths(source: Path) -> list[str]:
+    """Rule sources and generated instruction files quote rule text; never check them."""
     generated = [
         path for target in TARGETS.values() for path in (*target.owned_dirs, *target.managed_paths)
     ]
-    source_prefix = [] if source.is_absolute() else [source.as_posix()]
-    changes = exclude_paths(added_lines(root, base), [*source_prefix, *generated])
-    return report_verify(verify(pack, changes, root))
+    return [*([] if source.is_absolute() else [source.as_posix()]), *generated]
+
+
+def run_verify(root: Path, source: Path, base: str, judge_model: str | None = None) -> int:
+    """Run deterministic checks; with ``judge_model``, also run the advisory LLM judge."""
+    excluded = _praxis_paths(source)
+    pack = load_pack(root / source)
+    changes = exclude_paths(added_lines(root, base), excluded)
+    exit_code = report_verify(verify(pack, changes, root))
+    if judge_model:
+        rules = [rule for rule in pack.rules if not rule.checks]
+        scope = {rule.id: paths_in_scope(rule, changes) for rule in rules}
+        verdicts = Judge(model=judge_model).grade(rules, unified_diff(root, base, excluded), scope)
+        report_judge(verdicts, len(rules), judge_model)
+    return exit_code
+
+
+def report_judge(verdicts: Sequence[Verdict], judged: int, model: str) -> None:
+    for verdict in verdicts:
+        if verdict.status in ("pass", "fail", "unknown"):
+            print(f"JUDGE {verdict.status.upper()} {verdict.rule_id}")
+            if verdict.status != "pass":
+                for line in (verdict.explanation, *verdict.evidence):
+                    print(f"  {clean_text(line)}")
+    counts = Counter(verdict.status for verdict in verdicts)
+    not_applicable = counts["not_applicable"] + judged - len(verdicts)
+    print(
+        f"judge ({model}, advisory): {counts['fail']} failed, {counts['pass']} passed, "
+        f"{counts['unknown']} unknown, {not_applicable} not applicable"
+    )
 
 
 def report_verify(results: Sequence[RuleResult]) -> int:

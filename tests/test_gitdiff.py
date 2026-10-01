@@ -3,7 +3,7 @@ from pathlib import Path
 import pytest
 from conftest import git
 
-from praxis.gitdiff import GitError, added_lines, parse_diff
+from praxis.gitdiff import GitError, added_lines, parse_diff, unified_diff
 
 DIFF = """\
 diff --git a/src/loop.py b/src/loop.py
@@ -132,3 +132,30 @@ def test_added_lines_skips_large_untracked_files(repo, monkeypatch):
     (repo / "big.txt").write_text("x" * 100 + "\n", encoding="utf-8")
 
     assert set(added_lines(repo, "main")) == {"small.txt"}
+
+
+def test_unified_diff_has_context_untracked_files_and_exclusions(repo):
+    git(repo, "checkout", "-q", "-b", "feature")
+    (repo / "keep.py").write_text("a = 2\n", encoding="utf-8")
+    (repo / "fresh.py").write_text("new = 1\n", encoding="utf-8")
+    (repo / ".praxis").mkdir()
+    (repo / ".praxis" / "rule.md").write_text("secret rule text\n", encoding="utf-8")
+    (repo / "AGENTS.md").write_text("generated\n", encoding="utf-8")
+
+    diff = unified_diff(repo, "main", exclude=(".praxis", "AGENTS.md"))
+
+    assert "-a = 1" in diff and "+a = 2" in diff
+    assert "+++ b/fresh.py" in diff and "+new = 1" in diff
+    assert "secret rule text" not in diff and "generated" not in diff
+
+
+def test_unified_diff_excludes_paths_literally(repo):
+    git(repo, "checkout", "-q", "-b", "feature")
+    for name in ("a*.py", "ab.py"):
+        (repo / name).write_text("x = 1\n", encoding="utf-8")
+    git(repo, "add", ".")
+    git(repo, "commit", "-q", "-m", "add")
+
+    diff = unified_diff(repo, "main", exclude=("a*.py",))
+
+    assert "b/ab.py" in diff and "b/a*.py" not in diff

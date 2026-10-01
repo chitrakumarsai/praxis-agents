@@ -126,8 +126,11 @@ Rules render in file-name order, so numeric prefixes control ordering.
       rules see only matching files; praxis source and generated files excluded; exit 1 on failure
 - [x] Bundled pack checks: `forbid` checks on 3 rules (bare retry, swallowed errors, secrets, and
       shell execution), each tested against known-bad and known-good lines like any grader
-- [ ] LLM judge: grade the change against each rule's text with an evidence-based rubric and an
-      `unknown` option; optional extra, needs an API key (follow-up)
+- [x] LLM judge (`praxis verify --judge`, `judge` extra): one request per unchecked rule in scope,
+      shared cached diff prefix, pass/fail/not_applicable/unknown with `path:line` evidence,
+      refusal and malformed output -> unknown, token limit refuses instead of truncating; advisory
+- [ ] Calibrate the judge: reviewed pass/fail cases per rule, measure false accepts and rejects,
+      then decide whether judge failures may gate the exit code
 - Known limits: project root must be the git top level; `run` checks trust the rule files
 
 ## Open decisions

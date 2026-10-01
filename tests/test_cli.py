@@ -231,3 +231,40 @@ def test_verify_unknown_base_exits_2(verify_repo, capsys):
     assert run(verify_repo, "verify", "--base", "nope") == 2
 
     assert "unknown base 'nope'" in capsys.readouterr().err
+
+
+def test_verify_judge_grades_unchecked_rules_and_stays_advisory(verify_repo, monkeypatch, capsys):
+    from test_judge import FakeClient, reply
+
+    client = FakeClient(
+        {"prose": reply({"status": "fail", "explanation": "rude\x1b[31m", "evidence": ["notes.md:1: you are wrong"]})}
+    )
+    monkeypatch.setattr("praxis.judge._default_client", lambda: client)
+    (verify_repo / "notes.md").write_text("you are wrong\n", encoding="utf-8")
+
+    assert run(verify_repo, "verify", "--judge", "--judge-model", "claude-sonnet-5-5") == 0
+
+    out = capsys.readouterr().out
+    assert "JUDGE FAIL prose" in out and "notes.md:1: you are wrong" in out
+    assert "\x1b" not in out  # model text is printed without control characters
+    assert "judge (claude-sonnet-5-5, advisory): 1 failed, 0 passed, 0 unknown, 0 not applicable" in out
+    (call,) = client.calls  # only the rule without checks, and only with files in scope
+    assert call["model"] == "claude-sonnet-5-5"
+    assert "you are wrong" in call["messages"][0]["content"][0]["text"]
+    assert "Be kind." not in call["messages"][0]["content"][0]["text"]  # .praxis is excluded
+
+
+def test_verify_without_judge_never_builds_a_client(verify_repo, monkeypatch):
+    def fail():
+        raise AssertionError("client built")
+
+    monkeypatch.setattr("praxis.judge._default_client", fail)
+
+    assert run(verify_repo, "verify") == 0
+
+
+def test_judge_model_requires_judge(verify_repo):
+    with pytest.raises(SystemExit) as exc:
+        run(verify_repo, "verify", "--judge-model", "claude-sonnet-5-5")
+
+    assert exc.value.code == 2

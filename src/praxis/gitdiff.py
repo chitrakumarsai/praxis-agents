@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+from collections.abc import Iterable
 from pathlib import Path
 
 AddedLines = dict[str, tuple[tuple[int, str], ...]]  # root-relative path -> (line number, text)
@@ -25,22 +26,61 @@ def added_lines(root: Path, base: str) -> AddedLines:
 
     Paths are relative to ``root``, which may be below the git top level.
     """
-    _git(root, "rev-parse", "--is-inside-work-tree", error="not a git repository")
-    commit = f"{base}^{{commit}}"
-    _git(root, "rev-parse", "--verify", "--quiet", commit, error=f"unknown base {base!r}")
-    merge_base = _git(
-        root, "merge-base", base, "HEAD", error=f"no common history with {base!r}"
-    ).strip()
-
+    merge_base = _merge_base(root, base)
     # --relative limits the diff to ``root`` and makes its paths relative to it.
     diff = _git(root, "-c", "core.quotePath=false", "diff", "--relative", *DIFF_ARGS, merge_base)
     changes = parse_diff(diff)
-    untracked = _git(root, "ls-files", "--others", "--exclude-standard", "-z")
-    for relpath in filter(None, untracked.split("\0")):
+    for relpath in _untracked(root):
         lines = _text_lines(root / relpath)
         if lines:
             changes[relpath] = tuple(enumerate(lines, start=1))
     return changes
+
+
+def unified_diff(root: Path, base: str, exclude: Iterable[str] = ()) -> str:
+    """The change as a readable unified diff with context, for review; untracked files included.
+
+    Paths under any ``exclude`` prefix (praxis source, generated files) are left out.
+    """
+    prefixes = tuple(exclude)
+    merge_base = _merge_base(root, base)
+    pathspec = [".", *(f":(exclude,literal){prefix}" for prefix in prefixes)]
+    tracked = _git(
+        root, "-c", "core.quotePath=false", "diff", "--relative", "--no-color", "--no-ext-diff",
+        "--no-renames", merge_base, "--", *pathspec,
+    )
+    sections = [tracked.rstrip("\n")] if tracked.strip() else []
+    for relpath in _untracked(root):
+        lines = [] if is_excluded(relpath, prefixes) else _text_lines(root / relpath)
+        if lines:
+            body = "\n".join(f"+{line}" for line in lines)
+            sections.append(
+                f"diff --git a/{relpath} b/{relpath}\nnew file (untracked)\n--- /dev/null\n"
+                f"+++ b/{relpath}\n@@ -0,0 +1,{len(lines)} @@\n{body}"
+            )
+    return "\n".join(sections) + "\n" if sections else ""
+
+
+def is_excluded(path: str, prefixes: Iterable[str]) -> bool:
+    """True if ``path`` is one of ``prefixes`` or lies under one of them."""
+    return any(
+        path == prefix.rstrip("/") or path.startswith(prefix.rstrip("/") + "/")
+        for prefix in prefixes
+    )
+
+
+def _merge_base(root: Path, base: str) -> str:
+    _git(root, "rev-parse", "--is-inside-work-tree", error="not a git repository")
+    commit = f"{base}^{{commit}}"
+    _git(root, "rev-parse", "--verify", "--quiet", commit, error=f"unknown base {base!r}")
+    return _git(
+        root, "merge-base", base, "HEAD", error=f"no common history with {base!r}"
+    ).strip()
+
+
+def _untracked(root: Path) -> list[str]:
+    output = _git(root, "ls-files", "--others", "--exclude-standard", "-z")
+    return [relpath for relpath in output.split("\0") if relpath]
 
 
 def parse_diff(text: str) -> AddedLines:

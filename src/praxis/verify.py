@@ -12,7 +12,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from praxis.gitdiff import AddedLines
+from praxis.gitdiff import AddedLines, is_excluded
 from praxis.globs import matches
 from praxis.model import ForbidCheck, Pack, Rule, RunCheck
 
@@ -72,12 +72,13 @@ def _kill_group(process: subprocess.Popen[str]) -> None:
 
 def exclude_paths(changes: AddedLines, prefixes: Iterable[str]) -> AddedLines:
     """Drop changes under any of ``prefixes`` (praxis source and generated files)."""
-    roots = tuple(prefix.rstrip("/") for prefix in prefixes)
-    return {
-        path: lines
-        for path, lines in changes.items()
-        if not any(path == root or path.startswith(f"{root}/") for root in roots)
-    }
+    prefixes = tuple(prefixes)
+    return {path: lines for path, lines in changes.items() if not is_excluded(path, prefixes)}
+
+
+def paths_in_scope(rule: Rule, paths: Iterable[str]) -> list[str]:
+    """The changed paths ``rule`` applies to: all of them for an always-on rule."""
+    return sorted(path for path in paths if rule.scope == "always" or matches(path, rule.globs))
 
 
 def verify(
@@ -89,11 +90,7 @@ def verify(
 def _verify_rule(rule: Rule, changes: AddedLines, root: Path, runner: Runner) -> RuleResult:
     if not rule.checks:
         return RuleResult(rule.id, "unchecked")
-    in_scope = {
-        path: lines
-        for path, lines in sorted(changes.items())
-        if rule.scope == "always" or matches(path, rule.globs)
-    }
+    in_scope = {path: changes[path] for path in paths_in_scope(rule, changes)}
     if not in_scope:
         return RuleResult(rule.id, "skip", ("no changed files in scope",))
 
