@@ -1,0 +1,32 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "praxis-agents"
+version = "0.1.0"
+description = "Put your engineering best practices into practice, across every AI coding agent."
+readme = "README.md"
+license = { file = "LICENSE" }
+requires-python = ">=3.10"
+authors = [{ name = "Chitra Kumar Sai Chenuri Venkata" }]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+praxis = "praxis.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/chitrakumarsai/praxis-agents"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/praxis"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

@@ -25,3 +25,9 @@ Engineering guidance usually sits in docs that agents never read, or in tool-spe
 
     praxis init
     praxis sync --target claude,codex
+
+## Development
+
+    python -m venv .venv && source .venv/bin/activate
+    pip install -e '.[dev]'
+    pytest
