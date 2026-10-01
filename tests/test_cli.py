@@ -306,3 +306,51 @@ def test_verify_judge_skips_rules_marked_judge_false(verify_repo, monkeypatch, c
 
     assert client.calls == []
     assert "0 failed, 0 passed, 0 unknown, 0 not applicable" in capsys.readouterr().out
+
+
+def _judge_with(monkeypatch, verify_repo, payload):
+    from test_judge import FakeClient, reply
+
+    client = FakeClient({"prose": reply(payload)})
+    monkeypatch.setattr("praxis.judge.anthropic_backend._default_client", lambda: client)
+    (verify_repo / "notes.md").write_text("you are wrong\n", encoding="utf-8")
+
+
+JUDGE_FAIL = {"status": "fail", "explanation": "rude", "evidence": ["notes.md:1: you are wrong"]}
+
+
+def test_judge_strict_makes_judge_failures_fail_the_run(verify_repo, monkeypatch, capsys):
+    _judge_with(monkeypatch, verify_repo, JUDGE_FAIL)
+
+    assert run(verify_repo, "verify", "--judge", "--judge-strict") == 1
+
+    assert "judge (anthropic claude-opus-5-5, strict): 1 failed" in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    "payload",
+    [
+        {"status": "pass", "explanation": "kind", "evidence": ["notes.md:1: you are wrong"]},
+        {"status": "unknown", "explanation": "can't tell", "evidence": []},
+        {"status": "not_applicable", "explanation": "docs", "evidence": []},
+    ],
+)
+def test_judge_strict_ignores_verdicts_other_than_fail(verify_repo, monkeypatch, payload):
+    _judge_with(monkeypatch, verify_repo, payload)
+
+    assert run(verify_repo, "verify", "--judge", "--judge-strict") == 0
+
+
+def test_judge_failures_stay_advisory_without_strict(verify_repo, monkeypatch, capsys):
+    _judge_with(monkeypatch, verify_repo, JUDGE_FAIL)
+
+    assert run(verify_repo, "verify", "--judge") == 0
+
+    assert "advisory): 1 failed" in capsys.readouterr().out
+
+
+def test_judge_strict_requires_judge(verify_repo):
+    with pytest.raises(SystemExit) as exc:
+        run(verify_repo, "verify", "--judge-strict")
+
+    assert exc.value.code == 2

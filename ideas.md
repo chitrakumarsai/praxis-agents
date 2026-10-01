@@ -137,8 +137,8 @@ Rules render in file-name order, so numeric prefixes control ordering.
 - [x] Calibrate the judge (`evals/judge/`): 16 human-reviewed cases × 7 judged rules, 2 reps.
       Claude: 96% of violations caught, 0% false fails. OpenAI: 98% caught, 11% false fails.
       Labels were revised once after the first run (17 pairs, marked in `cases.yaml`)
-- [ ] Decide whether judge failures may gate the exit code (Claude's numbers support an opt-in
-      `--judge-strict`; OpenAI's 11% false-fail rate argues for keeping it advisory there)
+- [x] Opt-in `--judge-strict`: a judge `fail` exits 1; `unknown` and `not_applicable` never block.
+      Advisory stays the default; README cites the calibrated false-fail rates per provider
 - [ ] Grow the calibration set with real diffs from projects that use praxis
 - Known limits: project root must be the git top level; `run` checks trust the rule files
 

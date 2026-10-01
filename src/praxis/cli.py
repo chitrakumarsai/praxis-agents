@@ -6,6 +6,7 @@ import argparse
 import sys
 from collections import Counter
 from collections.abc import Sequence
+from dataclasses import dataclass
 from pathlib import Path
 
 from praxis import __version__
@@ -85,6 +86,11 @@ def build_parser() -> argparse.ArgumentParser:
     verify_command.add_argument(
         "--judge-model", help="judge model, with --judge (default: the provider's default)"
     )
+    verify_command.add_argument(
+        "--judge-strict",
+        action="store_true",
+        help="with --judge, exit 1 when the judge fails a rule (unknown verdicts never fail)",
+    )
     return parser
 
 
@@ -108,7 +114,11 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser = build_parser()
     args = parser.parse_args(argv)
     if args.command == "verify" and not args.judge:
-        judge_flags = {"--judge-provider": args.judge_provider, "--judge-model": args.judge_model}
+        judge_flags = {
+            "--judge-provider": args.judge_provider,
+            "--judge-model": args.judge_model,
+            "--judge-strict": args.judge_strict,
+        }
         for flag, value in judge_flags.items():
             if value:
                 parser.error(f"{flag} requires --judge")
@@ -128,7 +138,10 @@ def run_command(args: argparse.Namespace) -> int:
         print("\n".join(available_packs()))
         return EXIT_OK
     if args.command == "verify":
-        judge = (args.judge_provider or DEFAULT_PROVIDER, args.judge_model) if args.judge else None
+        judge = None
+        if args.judge:
+            provider = args.judge_provider or DEFAULT_PROVIDER
+            judge = JudgeOptions(provider, args.judge_model, args.judge_strict)
         return run_verify(args.root, args.source, args.base, judge)
     if args.command == "init":
         install_pack(args.pack, args.root / args.source)
@@ -149,26 +162,33 @@ def _praxis_paths(source: Path) -> list[str]:
     return [*([] if source.is_absolute() else [source.as_posix()]), *generated]
 
 
-def run_verify(
-    root: Path, source: Path, base: str, judge: tuple[str, str | None] | None = None
-) -> int:
-    """Run deterministic checks; with ``judge`` = (provider, model), also run the LLM judge."""
+@dataclass(frozen=True)
+class JudgeOptions:
+    provider: str
+    model: str | None = None
+    strict: bool = False  # judge failures fail the run, like deterministic checks
+
+
+def run_verify(root: Path, source: Path, base: str, judge: JudgeOptions | None = None) -> int:
+    """Run deterministic checks, then the LLM judge if ``judge`` is set."""
     excluded = _praxis_paths(source)
     pack = load_pack(root / source)
     changes = exclude_paths(added_lines(root, base), excluded)
     exit_code = report_verify(verify(pack, changes, root))
     if judge:
-        provider, model = judge
-        backend = make_backend(provider, model)
+        backend = make_backend(judge.provider, judge.model)
         rules = [rule for rule in pack.rules if rule.judge and not rule.checks]
         scope = {rule.id: paths_in_scope(rule, changes) for rule in rules}
         verdicts = Judge(backend).grade(rules, unified_diff(root, base, excluded), scope)
-        report_judge(verdicts, len(rules), f"{backend.provider} {backend.model}")
+        label = f"{backend.provider} {backend.model}, {'strict' if judge.strict else 'advisory'}"
+        report_judge(verdicts, len(rules), label)
+        if judge.strict and any(verdict.status == "fail" for verdict in verdicts):
+            exit_code = EXIT_FAILED
     return exit_code
 
 
-def report_judge(verdicts: Sequence[Verdict], judged: int, model: str) -> None:
-    """Print verdicts; ``model`` is shown in the summary as "<provider> <model>"."""
+def report_judge(verdicts: Sequence[Verdict], judged: int, label: str) -> None:
+    """Print verdicts; ``label`` names the provider, model, and mode in the summary line."""
     for verdict in verdicts:
         if verdict.status in ("pass", "fail", "unknown"):
             print(f"JUDGE {verdict.status.upper()} {verdict.rule_id}")
@@ -178,7 +198,7 @@ def report_judge(verdicts: Sequence[Verdict], judged: int, model: str) -> None:
     counts = Counter(verdict.status for verdict in verdicts)
     not_applicable = counts["not_applicable"] + judged - len(verdicts)
     print(
-        f"judge ({model}, advisory): {counts['fail']} failed, {counts['pass']} passed, "
+        f"judge ({label}): {counts['fail']} failed, {counts['pass']} passed, "
         f"{counts['unknown']} unknown, {not_applicable} not applicable"
     )
 
