@@ -2,8 +2,8 @@ import os
 
 import pytest
 
-from praxis.model import OutputFile
-from praxis.sync import (
+from praxis_agents.model import OutputFile
+from praxis_agents.sync import (
     BEGIN,
     END,
     NOTICE,
@@ -275,7 +275,7 @@ def test_plan_stale_leaves_symlinked_managed_files_alone(tmp_path):
 # Scripts and assets: byte content, ownership tracked by a manifest of hashes.
 import hashlib  # noqa: E402
 
-from praxis.sync import MANIFEST_NAME, manifest_text  # noqa: E402
+from praxis_agents.sync import MANIFEST_NAME, manifest_text  # noqa: E402
 
 SCRIPT = b"#!/bin/sh\necho v2\n"
 

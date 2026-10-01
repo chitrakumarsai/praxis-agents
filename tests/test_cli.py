@@ -4,7 +4,7 @@ from pathlib import Path
 import pytest
 from conftest import git
 
-from praxis.cli import main
+from praxis_agents.cli import main
 
 
 @pytest.fixture
@@ -111,12 +111,12 @@ def test_init_unknown_pack_exits_2(tmp_path, capsys):
 
 
 def test_init_failure_leaves_no_partial_source(tmp_path, monkeypatch, capsys):
-    import praxis.bundled
+    import praxis_agents.bundled
 
     def fail(*args):
         raise OSError("disk full")
 
-    monkeypatch.setattr(praxis.bundled.Path, "write_bytes", fail)
+    monkeypatch.setattr(praxis_agents.bundled.Path, "write_bytes", fail)
 
     assert main(["init", "agent-engineering", "--root", str(tmp_path)]) == 2
     assert not (tmp_path / ".praxis").exists()
@@ -239,7 +239,7 @@ def test_verify_judge_grades_unchecked_rules_and_stays_advisory(verify_repo, mon
     client = FakeClient(
         {"prose": reply({"status": "fail", "explanation": "rude\x1b[31m", "evidence": ["notes.md:1: you are wrong"]})}
     )
-    monkeypatch.setattr("praxis.judge.anthropic_backend._default_client", lambda: client)
+    monkeypatch.setattr("praxis_agents.judge.anthropic_backend._default_client", lambda: client)
     (verify_repo / "notes.md").write_text("you are wrong\n", encoding="utf-8")
 
     assert run(verify_repo, "verify", "--judge", "--judge-model", "claude-sonnet-5-5") == 0
@@ -258,7 +258,7 @@ def test_verify_without_judge_never_builds_a_client(verify_repo, monkeypatch):
     def fail():
         raise AssertionError("client built")
 
-    monkeypatch.setattr("praxis.judge.anthropic_backend._default_client", fail)
+    monkeypatch.setattr("praxis_agents.judge.anthropic_backend._default_client", fail)
 
     assert run(verify_repo, "verify") == 0
 
@@ -276,7 +276,7 @@ def test_verify_judge_with_openai_provider(verify_repo, monkeypatch, capsys):
     client = FakeOpenAI(
         response({"status": "fail", "explanation": "rude", "evidence": ["notes.md:1: you are wrong"]})
     )
-    monkeypatch.setattr("praxis.judge.openai_backend._default_client", lambda: client)
+    monkeypatch.setattr("praxis_agents.judge.openai_backend._default_client", lambda: client)
     (verify_repo / "notes.md").write_text("you are wrong\n", encoding="utf-8")
 
     assert run(verify_repo, "verify", "--judge", "--judge-provider", "openai") == 0
@@ -297,7 +297,7 @@ def test_verify_judge_skips_rules_marked_judge_false(verify_repo, monkeypatch, c
     from test_judge import FakeClient
 
     client = FakeClient()
-    monkeypatch.setattr("praxis.judge.anthropic_backend._default_client", lambda: client)
+    monkeypatch.setattr("praxis_agents.judge.anthropic_backend._default_client", lambda: client)
     prose = verify_repo / ".praxis" / "rules" / "020-prose.md"
     prose.write_text("---\njudge: false\n---\nBe kind.\n", encoding="utf-8")
     (verify_repo / "notes.md").write_text("you are wrong\n", encoding="utf-8")
@@ -312,7 +312,7 @@ def _judge_with(monkeypatch, verify_repo, payload):
     from test_judge import FakeClient, reply
 
     client = FakeClient({"prose": reply(payload)})
-    monkeypatch.setattr("praxis.judge.anthropic_backend._default_client", lambda: client)
+    monkeypatch.setattr("praxis_agents.judge.anthropic_backend._default_client", lambda: client)
     (verify_repo / "notes.md").write_text("you are wrong\n", encoding="utf-8")
 
 

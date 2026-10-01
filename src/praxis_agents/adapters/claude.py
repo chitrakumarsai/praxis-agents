@@ -2,9 +2,9 @@
 
 from __future__ import annotations
 
-from praxis.adapters import agents_md
-from praxis.adapters.skills import render_skills
-from praxis.model import OutputFile, Pack
+from praxis_agents.adapters import agents_md
+from praxis_agents.adapters.skills import render_skills
+from praxis_agents.model import OutputFile, Pack
 
 PATH = "CLAUDE.md"
 SKILLS_DIR = ".claude/skills"

@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from praxis.judge import (
+from praxis_agents.judge import (
     DEFAULT_EFFORT,
     MAX_OUTPUT_TOKENS,
     VERDICT_SCHEMA,

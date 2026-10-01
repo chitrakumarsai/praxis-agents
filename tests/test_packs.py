@@ -5,12 +5,12 @@ from pathlib import Path
 
 import pytest
 
-from praxis.adapters import agents_md
-from praxis.bundled import available_packs, pack_source
-from praxis.loader import load_pack
-from praxis.model import ForbidCheck, Pack
-from praxis.sync import managed_block
-from praxis.verify import verify
+from praxis_agents.adapters import agents_md
+from praxis_agents.bundled import available_packs, pack_source
+from praxis_agents.loader import load_pack
+from praxis_agents.model import ForbidCheck, Pack
+from praxis_agents.sync import managed_block
+from praxis_agents.verify import verify
 
 PACK_NAMES = available_packs()
 

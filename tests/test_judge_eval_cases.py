@@ -37,7 +37,7 @@ def test_modified_files_produce_context_diffs():
 import run  # noqa: E402
 import summarize  # noqa: E402
 
-from praxis.judge import Verdict  # noqa: E402
+from praxis_agents.judge import Verdict  # noqa: E402
 
 
 def _verdicts(case, pick):

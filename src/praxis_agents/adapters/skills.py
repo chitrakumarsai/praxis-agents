@@ -4,8 +4,8 @@ from __future__ import annotations
 
 import yaml
 
-from praxis.model import NOTICE, OutputFile, Pack, Skill
-from praxis.sync import MANIFEST_NAME, manifest_text
+from praxis_agents.model import NOTICE, OutputFile, Pack, Skill
+from praxis_agents.sync import MANIFEST_NAME, manifest_text
 
 # Codex, Cursor, and GitHub Copilot read this project-level directory.
 SHARED_SKILLS_DIR = ".agents/skills"

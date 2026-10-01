@@ -1,6 +1,6 @@
 import pytest
 
-from praxis.globs import matches
+from praxis_agents.globs import matches
 
 CASES = [
     ("**/agents/**", "agents/loop.py", True),

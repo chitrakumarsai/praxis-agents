@@ -12,9 +12,9 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Literal
 
-from praxis.gitdiff import AddedLines, is_excluded
-from praxis.globs import matches
-from praxis.model import ForbidCheck, Pack, Rule, RunCheck
+from praxis_agents.gitdiff import AddedLines, is_excluded
+from praxis_agents.globs import matches
+from praxis_agents.model import ForbidCheck, Pack, Rule, RunCheck
 
 Status = Literal["pass", "fail", "skip", "unchecked"]
 Runner = Callable[[tuple[str, ...], Path], tuple[int, str]]  # (argv, cwd) -> (exit code, output)

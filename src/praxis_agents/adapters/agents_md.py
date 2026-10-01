@@ -2,8 +2,8 @@
 
 from __future__ import annotations
 
-from praxis.adapters.skills import SHARED_SKILLS_DIR, render_skills
-from praxis.model import OutputFile, Pack
+from praxis_agents.adapters.skills import SHARED_SKILLS_DIR, render_skills
+from praxis_agents.model import OutputFile, Pack
 
 PATH = "AGENTS.md"
 

@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from praxis.model import NOTICE, OutputFile, Pack
+from praxis_agents.model import NOTICE, OutputFile, Pack
 
 RULES_DIR = ".cursor/rules"
 
