@@ -6,7 +6,7 @@ and pass it to :func:`register_adapter`.
 
 from __future__ import annotations
 
-from .base import GENERATED_NOTICE, Adapter, MarkdownAdapter, Rule, RuleSet
+from .base import Adapter, MarkdownAdapter, generated_notice
 from .claude import ClaudeAdapter
 from .codex import CodexAdapter
 
@@ -36,14 +36,12 @@ register_adapter(ClaudeAdapter)
 register_adapter(CodexAdapter)
 
 __all__ = [
-    "GENERATED_NOTICE",
     "Adapter",
     "ClaudeAdapter",
     "CodexAdapter",
     "MarkdownAdapter",
-    "Rule",
-    "RuleSet",
     "available_targets",
+    "generated_notice",
     "get_adapter",
     "register_adapter",
 ]

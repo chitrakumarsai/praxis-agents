@@ -6,7 +6,8 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Iterable
 
-from .adapters import RuleSet, get_adapter
+from .adapters import get_adapter
+from .rules import RuleSet
 
 
 @dataclass(frozen=True)
@@ -55,6 +56,7 @@ def sync(
         current = path.read_text(encoding="utf-8") if path.exists() else None
         changed = current != content
         if changed and not dry_run:
+            path.parent.mkdir(parents=True, exist_ok=True)
             path.write_text(content, encoding="utf-8")
         results.append(SyncResult(target=name, path=path, changed=changed))
     return results

@@ -8,5 +8,4 @@ from .base import MarkdownAdapter
 class ClaudeAdapter(MarkdownAdapter):
     name = "claude"
     filename = "CLAUDE.md"
-    heading = "CLAUDE.md"
     intro = "Follow these project rules when working in this repository."
